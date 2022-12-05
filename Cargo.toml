@@ -1,0 +1,69 @@
+[package]
+	edition = "2021"
+	name = "advent_of_code_2022"
+	version = "0.1.0"
+
+	# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+	ndarray = "0.15.6"
+	num = "0.4.0"
+	priority-queue = "1.3.0"
+	regex = "1.7.0"
+	strum = "0.24.1"
+	strum_macros = "0.24.3"
+
+[features]
+	all_days = [
+		"day_01",
+		"day_02",
+		"day_03",
+		"day_04",
+		"day_05",
+		"day_06",
+		"day_07",
+		"day_08",
+		"day_09",
+		"day_10",
+		"day_11",
+		"day_12",
+		"day_13",
+		"day_14",
+		"day_15",
+		"day_16",
+		"day_17",
+		"day_18",
+		"day_19",
+		"day_20",
+		"day_21",
+		"day_22",
+		"day_23",
+		"day_24",
+		"day_25",
+	]
+	day_01 = []
+	day_02 = []
+	day_03 = []
+	day_04 = []
+	day_05 = []
+	day_06 = []
+	day_07 = []
+	day_08 = []
+	day_09 = []
+	day_10 = []
+	day_11 = []
+	day_12 = []
+	day_13 = []
+	day_14 = []
+	day_15 = []
+	day_16 = []
+	day_17 = []
+	day_18 = []
+	day_19 = []
+	day_20 = []
+	day_21 = []
+	day_22 = []
+	day_23 = []
+	day_24 = []
+	day_25 = []
+	default = []
