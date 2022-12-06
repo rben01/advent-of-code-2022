@@ -93,19 +93,22 @@ impl<T1, T2> From<(usize, (T1, T2))> for Answer<T1, T2> {
 }
 
 #[track_caller]
-pub fn test_part<T, F>(input: &str, (getter, expected): (F, T))
+pub fn test_part<T, U, F>(input: &str, (getter, expected): (F, U))
 where
-	T: Eq + Debug,
+	T: PartialEq<U> + Debug,
+	U: Debug,
 	F: Fn(&str) -> T,
 {
 	assert_eq!(getter(input), expected);
 }
 
 #[track_caller]
-pub fn test_parts<T1, T2, F1, F2>(input: &str, pt1: (F1, T1), pt2: (F2, T2))
+pub fn test_parts<T1, T2, U1, U2, F1, F2>(input: &str, pt1: (F1, U1), pt2: (F2, U2))
 where
-	T1: Eq + Debug,
-	T2: Eq + Debug,
+	T1: PartialEq<U1> + Debug,
+	T2: PartialEq<U2> + Debug,
+	U1: Debug,
+	U2: Debug,
 	F1: Fn(&str) -> T1,
 	F2: Fn(&str) -> T2,
 {
