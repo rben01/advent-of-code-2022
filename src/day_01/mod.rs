@@ -2,7 +2,8 @@
 use crate::Answer;
 
 fn ans_for_input(input: &str) -> Answer<usize, usize> {
-	(1, (pt1(input), pt2(input))).into()
+	let elves = read_input(input).expect("could not read input");
+	(1, (pt1(&elves), pt2(&elves))).into()
 }
 
 pub fn ans() -> Answer<usize, usize> {
@@ -30,17 +31,15 @@ fn read_input(input: &str) -> Option<Vec<usize>> {
 // end::setup[]
 
 // tag::pt1[]
-fn pt1(input: &str) -> usize {
-	let elves = read_input(input).unwrap();
-	elves.into_iter().fold(0, std::cmp::Ord::max)
+fn pt1(elves: &[usize]) -> usize {
+	elves.iter().copied().fold(0, std::cmp::Ord::max)
 }
 // end::pt1[]
 
 // tag::pt2[]
-fn pt2(input: &str) -> usize {
+fn pt2(elves: &[usize]) -> usize {
 	use std::collections::BinaryHeap;
-	let elves = read_input(input).unwrap();
-	let heap = BinaryHeap::from(elves);
+	let heap = elves.iter().copied().collect::<BinaryHeap<_>>();
 	heap.into_iter_sorted().take(3).sum()
 }
 // end::pt2[]
@@ -48,12 +47,21 @@ fn pt2(input: &str) -> usize {
 #[cfg(test)]
 mod test {
 	#![allow(unused_imports)]
+
 	use super::*;
-	use crate::{test_part, test_parts};
+	use crate::{run_test, TestCase};
 
 	#[test]
 	fn test() {
-		test_parts(include_str!("sample_input.txt"), (pt1, 24000), (pt2, 45000));
-		test_parts(include_str!("input.txt"), (pt1, 64929), (pt2, 193_697));
+		run_test(
+			read_input(include_str!("sample_input.txt"))
+				.unwrap()
+				.as_slice(),
+			((pt1, 24000), (pt2, 45000)),
+		);
+		run_test(
+			read_input(include_str!("input.txt")).unwrap().as_slice(),
+			((pt1, 64929), (pt2, 193_697)),
+		);
 	}
 }

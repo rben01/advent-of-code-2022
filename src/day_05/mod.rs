@@ -129,15 +129,17 @@ fn pt2(input: &str) -> String {
 mod test {
 	#![allow(unused_imports)]
 	use super::*;
-	use crate::{test_part, test_parts};
+	use crate::{run_test, TestCase};
 
 	#[test]
 	fn test() {
-		test_parts(include_str!("sample_input.txt"), (pt1, "CMZ"), (pt2, "MCD"));
-		test_parts(
+		run_test(
+			include_str!("sample_input.txt"),
+			((pt1, "CMZ".into()), (pt2, "MCD".into())),
+		);
+		run_test(
 			include_str!("input.txt"),
-			(pt1, "VJSFHWGFT"),
-			(pt2, "LCTQFBVZV"),
+			((pt1, "VJSFHWGFT".into()), (pt2, "LCTQFBVZV".into())),
 		);
 	}
 }

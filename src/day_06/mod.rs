@@ -18,12 +18,12 @@ fn find_marker(chars: impl IntoIterator<Item = char>, marker_len: usize) -> Opti
 	let mut char_iter = (1..).zip(chars);
 
 	let mut buf = VecDeque::with_capacity(marker_len);
-	let mut counts = BTreeMap::new();
+	let mut counts = BTreeMap::<_, usize>::new();
 
 	for _ in 0..marker_len {
 		let (_, c) = char_iter.next()?;
 		buf.push_back(c);
-		*counts.entry(c).or_insert(0_usize) += 1;
+		*counts.entry(c).or_insert(0) += 1;
 	}
 
 	for (i, c) in char_iter {
@@ -66,11 +66,11 @@ fn pt2(input: &str) -> usize {
 mod test {
 	#![allow(unused_imports)]
 	use super::*;
-	use crate::{test_part, test_parts};
+	use crate::{run_test, TestCase};
 
 	#[test]
 	fn test() {
-		test_parts(include_str!("sample_input.txt"), (pt1, 7), (pt2, 19));
-		test_parts(include_str!("input.txt"), (pt1, 1093), (pt2, 3534));
+		run_test(include_str!("sample_input.txt"), ((pt1, 7), (pt2, 19)));
+		run_test(include_str!("input.txt"), ((pt1, 1093), (pt2, 3534)));
 	}
 }

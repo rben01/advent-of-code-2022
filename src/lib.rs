@@ -6,8 +6,7 @@
 	clippy::enum_glob_use,
 	clippy::missing_panics_doc,
 	clippy::must_use_candidate,
-	clippy::similar_names,
-	clippy::too_many_lines
+	clippy::redundant_closure_for_method_calls
 )]
 
 use std::fmt::{Debug, Display};
@@ -92,26 +91,55 @@ impl<T1, T2> From<(usize, (T1, T2))> for Answer<T1, T2> {
 	}
 }
 
-#[track_caller]
-pub fn test_part<T, U, F>(input: &str, (getter, expected): (F, U))
-where
-	T: PartialEq<U> + Debug,
-	U: Debug,
-	F: Fn(&str) -> T,
-{
-	assert_eq!(getter(input), expected);
+pub(crate) trait TestCase<Input> {
+	type Actual: PartialEq<Self::Expected>;
+	type Expected;
+	fn get_test_case(self, input: Input) -> (Self::Actual, Self::Expected);
 }
 
-#[track_caller]
-pub fn test_parts<T1, T2, U1, U2, F1, F2>(input: &str, pt1: (F1, U1), pt2: (F2, U2))
+impl<Input, AnsFunc, Actual, Expected> TestCase<Input> for (AnsFunc, Expected)
 where
-	T1: PartialEq<U1> + Debug,
-	T2: PartialEq<U2> + Debug,
-	U1: Debug,
-	U2: Debug,
-	F1: Fn(&str) -> T1,
-	F2: Fn(&str) -> T2,
+	AnsFunc: Fn(Input) -> Actual,
+	Actual: PartialEq<Expected>,
 {
-	test_part(input, (pt1.0, pt1.1));
-	test_part(input, (pt2.0, pt2.1));
+	type Actual = Actual;
+	type Expected = Expected;
+
+	fn get_test_case(self, input: Input) -> (Self::Actual, Self::Expected) {
+		let (get_ans, expected) = self;
+		let actual = get_ans(input);
+		(actual, expected)
+	}
+}
+
+impl<Input, AnsFunc1, AnsFunc2, Actual1, Actual2, Expected1, Expected2> TestCase<Input>
+	for ((AnsFunc1, Expected1), (AnsFunc2, Expected2))
+where
+	AnsFunc1: Fn(Input) -> Actual1,
+	AnsFunc2: Fn(Input) -> Actual2,
+	(Actual1, Actual2): PartialEq<(Expected1, Expected2)>,
+	Input: Copy,
+{
+	type Actual = (Actual1, Actual2);
+	type Expected = (Expected1, Expected2);
+
+	fn get_test_case(self, input: Input) -> (Self::Actual, Self::Expected) {
+		let ((get_ans_1, expected_1), (get_ans_2, expected_2)) = self;
+		let actual_1 = get_ans_1(input);
+		let actual_2 = get_ans_2(input);
+		((actual_1, actual_2), (expected_1, expected_2))
+	}
+}
+
+#[cfg(test)]
+#[track_caller]
+pub(crate) fn run_test<Input, Actual, Expected>(
+	input: Input,
+	test_case: impl TestCase<Input, Actual = Actual, Expected = Expected>,
+) where
+	Actual: Eq + Debug + PartialEq<Expected>,
+	Expected: Eq + Debug,
+{
+	let (expected, actual) = test_case.get_test_case(input);
+	assert_eq!(expected, actual);
 }

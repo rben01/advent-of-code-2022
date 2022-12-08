@@ -123,15 +123,12 @@ fn read_input(input: &str) -> Option<DirEntry> {
 						}
 						dst_name => {
 							let dst = match curr_dir.borrow().get(dst_name) {
-								Some(x) => {
-									let k = &x.kind;
-									match k {
-										DirEntryInProgressKind::File => {
-											panic!("tried to `cd {dst_name}`, but {dst_name} is a file")
-										}
-										DirEntryInProgressKind::Directory(d) => Rc::clone(d),
+								Some(entry) => match &entry.kind {
+									DirEntryInProgressKind::File => {
+										panic!("tried to `cd {dst_name}`, but {dst_name} is a file")
 									}
-								}
+									DirEntryInProgressKind::Directory(d) => Rc::clone(d),
+								},
 								None => into_rc_rc(DirEntryInProgressKind::new_dir_contents()),
 							};
 

@@ -2,7 +2,8 @@
 use crate::{Answer, ToResultDefaultErr};
 
 fn ans_for_input(input: &str) -> Answer<usize, usize> {
-	(4, (pt1(input), pt2(input))).into()
+	let pairs = read_input(input).unwrap();
+	(4, (pt1(&pairs), pt2(&pairs))).into()
 }
 
 pub fn ans() -> Answer<usize, usize> {
@@ -39,7 +40,7 @@ fn read_input(input: &str) -> Option<Vec<Pair>> {
 		let mut comps = line.split(',');
 		let s1 = comps.next()?;
 		let s2 = comps.next()?;
-		let [a1, a2] = [s1, s2].map(|s| Assignment::try_from(s));
+		let [a1, a2] = [s1, s2].map(Assignment::try_from);
 		let [a1, a2] = [a1.ok()?, a2.ok()?];
 		pairs.push(Pair(a1, a2));
 	}
@@ -50,10 +51,9 @@ fn read_input(input: &str) -> Option<Vec<Pair>> {
 // end::setup[]
 
 // tag::pt1[]
-fn pt1(input: &str) -> usize {
-	let pairs = read_input(input).expect("failed to parse input");
+fn pt1(pairs: &[Pair]) -> usize {
 	pairs
-		.into_iter()
+		.iter()
 		.map(|Pair(a1, a2)| {
 			let Assignment {
 				low: low1,
@@ -72,10 +72,9 @@ fn pt1(input: &str) -> usize {
 // end::pt1[]
 
 // tag::pt2[]
-fn pt2(input: &str) -> usize {
-	let pairs = read_input(input).expect("failed to parse input");
+fn pt2(pairs: &[Pair]) -> usize {
 	pairs
-		.into_iter()
+		.iter()
 		.map(|Pair(a1, a2)| {
 			let Assignment {
 				low: low1,
@@ -96,12 +95,21 @@ fn pt2(input: &str) -> usize {
 #[cfg(test)]
 mod test {
 	#![allow(unused_imports)]
+
 	use super::*;
-	use crate::{test_part, test_parts};
+	use crate::{run_test, TestCase};
 
 	#[test]
 	fn test() {
-		test_parts(include_str!("sample_input.txt"), (pt1, 2), (pt2, 70));
-		test_parts(include_str!("input.txt"), (pt1, 518), (pt2, 2425));
+		run_test(
+			read_input(include_str!("sample_input.txt"))
+				.unwrap()
+				.as_slice(),
+			((pt1, 2), (pt2, 4)),
+		);
+		run_test(
+			read_input(include_str!("input.txt")).unwrap().as_slice(),
+			((pt1, 518), (pt2, 909)),
+		);
 	}
 }
