@@ -49,19 +49,21 @@ mod test {
 	#![allow(unused_imports)]
 
 	use super::*;
-	use crate::{run_test, TestCase};
+	use crate::run_tests;
 
 	#[test]
 	fn test() {
-		run_test(
+		run_tests(
 			read_input(include_str!("sample_input.txt"))
 				.unwrap()
 				.as_slice(),
-			((pt1, 24000), (pt2, 45000)),
+			(pt1, 24000),
+			(pt2, 45000),
 		);
-		run_test(
+		run_tests(
 			read_input(include_str!("input.txt")).unwrap().as_slice(),
-			((pt1, 64929), (pt2, 193_697)),
+			(pt1, 64929),
+			(pt2, 193_697),
 		);
 	}
 }

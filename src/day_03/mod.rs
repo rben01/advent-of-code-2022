@@ -115,11 +115,11 @@ fn pt2(input: &str) -> usize {
 mod test {
 	#![allow(unused_imports)]
 	use super::*;
-	use crate::{run_test, TestCase};
+	use crate::run_tests;
 
 	#[test]
 	fn test() {
-		run_test(include_str!("sample_input.txt"), ((pt1, 157), (pt2, 70)));
-		run_test(include_str!("input.txt"), ((pt1, 8053), (pt2, 2425)));
+		run_tests(include_str!("sample_input.txt"), (pt1, 157), (pt2, 70));
+		run_tests(include_str!("input.txt"), (pt1, 8053), (pt2, 2425));
 	}
 }

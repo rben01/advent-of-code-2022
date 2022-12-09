@@ -104,8 +104,7 @@ fn read_input(input: &str) -> Option<DirEntry> {
 	let root = into_rc_rc(DirectoryContentsInProgress::new());
 	let mut dir_stack = Vec::new();
 
-	let mut lines = input.lines();
-	for line in lines.by_ref() {
+	for line in input.lines() {
 		let curr_dir = dir_stack.last().map_or_else(|| Rc::clone(&root), Rc::clone);
 
 		let mut comps = line.split_whitespace();
@@ -184,16 +183,13 @@ fn pt1(dirs: &DirEntry) -> usize {
 		let DirEntry { size, kind } = &entry;
 		let size = *size;
 
-		match kind {
-			DirEntryKind::File => {}
-			DirEntryKind::Directory(d) => {
-				if size <= 100_000 {
-					ans += size;
-				}
+		if let DirEntryKind::Directory(d) = kind {
+			if size <= 100_000 {
+				ans += size;
+			}
 
-				for child in d.values() {
-					stack.push(child);
-				}
+			for child in d.values() {
+				stack.push(child);
 			}
 		}
 	}
@@ -216,16 +212,13 @@ fn pt2(dirs: &DirEntry) -> usize {
 		let DirEntry { size, kind } = &entry;
 		let size = *size;
 
-		match kind {
-			DirEntryKind::File => {}
-			DirEntryKind::Directory(d) => {
-				if unused_space + size >= MIN_UNUSED_SPACE && size < min_deleted_dir_size {
-					min_deleted_dir_size = size;
-				}
+		if let DirEntryKind::Directory(d) = kind {
+			if unused_space + size >= MIN_UNUSED_SPACE && size < min_deleted_dir_size {
+				min_deleted_dir_size = size;
+			}
 
-				for child in d.values() {
-					stack.push(child);
-				}
+			for child in d.values() {
+				stack.push(child);
 			}
 		}
 	}
@@ -238,17 +231,19 @@ fn pt2(dirs: &DirEntry) -> usize {
 mod test {
 	#![allow(unused_imports)]
 	use super::*;
-	use crate::{run_test, TestCase};
+	use crate::run_tests;
 
 	#[test]
 	fn test() {
-		run_test(
+		run_tests(
 			&read_input(include_str!("sample_input.txt")).unwrap(),
-			((pt1, 95437), (pt2, 24_933_642)),
+			(pt1, 95437),
+			(pt2, 24_933_642),
 		);
-		run_test(
+		run_tests(
 			&read_input(include_str!("input.txt")).unwrap(),
-			((pt1, 919_137), (pt2, 2_877_389)),
+			(pt1, 919_137),
+			(pt2, 2_877_389),
 		);
 	}
 }
