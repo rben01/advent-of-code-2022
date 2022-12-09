@@ -4,7 +4,7 @@ use ndarray::{prelude::*, NdProducer, SliceInfo, SliceInfoElem, Zip as ArrayZip}
 
 fn ans_for_input(input: &str) -> Answer<usize, usize> {
 	let mat = read_input(input).expect("couldn't read input");
-	(7, (pt1(mat.view()), pt2(mat.view()))).into()
+	(8, (pt1(mat.view()), pt2(mat.view()))).into()
 }
 
 pub fn ans() -> Answer<usize, usize> {
