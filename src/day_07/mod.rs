@@ -4,7 +4,7 @@ use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 fn ans_for_input(input: &str) -> Answer<usize, usize> {
 	let dirs = read_input(input).expect("couldn't read input");
-	(6, (pt1(&dirs), pt2(&dirs))).into()
+	(7, (pt1(&dirs), pt2(&dirs))).into()
 }
 
 pub fn ans() -> Answer<usize, usize> {
