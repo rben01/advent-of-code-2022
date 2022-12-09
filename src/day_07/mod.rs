@@ -48,14 +48,11 @@ impl DirEntryInProgress {
 	}
 
 	fn compute_child_sizes(&mut self) {
-		match &self.kind {
-			DirEntryInProgressKind::File => {}
-			DirEntryInProgressKind::Directory(d) => {
-				for child in d.borrow_mut().values_mut() {
-					child.compute_child_sizes();
-				}
-				self.size = d.borrow().values().map(|entry| entry.size).sum();
+		if let DirEntryInProgressKind::Directory(d) = &self.kind {
+			for child in d.borrow_mut().values_mut() {
+				child.compute_child_sizes();
 			}
+			self.size = d.borrow().values().map(|entry| entry.size).sum();
 		}
 	}
 
