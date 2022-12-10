@@ -82,7 +82,7 @@ pub struct Answer<T1, T2> {
 impl<T1: Debug, T2: Debug> Display for Answer<T1, T2> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let Answer { day, pt1, pt2 } = self;
-		write!(f, "Day: {day} ; Part 1: {pt1:?} ; Part 2: {pt2:?}")
+		write!(f, "Day {day:0>2}: {:?}", (pt1, pt2))
 	}
 }
 

@@ -2,13 +2,9 @@ macro_rules! show_answers {
 	($($mod_name:ident:$ft_name:literal),* $(,)?) => {
 		$(
 			#[cfg(feature=$ft_name)]
-			mod $mod_name {
-				pub(super) use advent_of_code_2022::$mod_name::ans;
+			{
+				println!("{}", advent_of_code_2022::$mod_name::ans());
 			}
-		)*
-      $(
-			#[cfg(feature=$ft_name)]
-			println!("{}", $mod_name::ans());
 		)*
 	};
 }
