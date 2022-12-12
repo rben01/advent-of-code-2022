@@ -20,8 +20,8 @@ impl Instruction {
 	fn n_cycles(self) -> usize {
 		use Instruction::*;
 		match self {
-			Noop => 1,
-			AddX(_) => 2,
+			Noop => 0,
+			AddX(_) => 1,
 		}
 	}
 }
@@ -66,12 +66,16 @@ struct Cpu {
 
 impl Cpu {
 	fn iter(&self) -> CpuIter<'_> {
+		let initial_n_cycles = self
+			.instructions
+			.first()
+			.map_or(0, |instr| instr.n_cycles());
+
 		CpuIter {
 			cpu: self,
 			register: 1,
 			index: 0,
-			n_cycles: 0,
-			loaded: false,
+			n_cycles: initial_n_cycles,
 		}
 	}
 }
@@ -81,7 +85,6 @@ struct CpuIter<'a> {
 	register: i32,
 	index: usize,
 	n_cycles: usize,
-	loaded: bool,
 }
 
 impl Iterator for CpuIter<'_> {
@@ -94,28 +97,23 @@ impl Iterator for CpuIter<'_> {
 			register,
 			index,
 			n_cycles,
-			loaded,
 		} = self;
 
 		let ret = *register;
 
-		// before cycle
-		let instruction = instructions.get(*index)?;
-		if !*loaded && *n_cycles == 0 {
-			*n_cycles += instruction.n_cycles();
-			*loaded = true;
-		}
-
-		// during cycle
 		if *n_cycles > 0 {
 			*n_cycles -= 1;
 		} else {
+			let instruction = match instructions.get(*index) {
+				Some(instr) => instr,
+				None => return None,
+			};
 			match instruction {
 				Noop => {}
 				AddX(value) => *register += *value,
 			}
-			*loaded = false;
 			*index += 1;
+			*n_cycles = instruction.n_cycles();
 		}
 
 		Some(ret)
@@ -126,10 +124,6 @@ impl Iterator for CpuIter<'_> {
 
 // tag::pt1[]
 fn pt1(cpu: &Cpu) -> i32 {
-	for (i, x) in (1..).zip(cpu.iter()) {
-		println!("{:?}", (i, x));
-	}
-
 	(1..)
 		.zip(cpu.iter())
 		.skip(19)
@@ -157,7 +151,7 @@ fn pt2(cpu: &Cpu) -> String {
 		let c = if pixel { '#' } else { ' ' };
 		s.push(c);
 	}
-	println!("{s}");
+	// println!("{s}");
 	s
 }
 // end::pt2[]
