@@ -1,5 +1,5 @@
 // tag::setup[]
-use crate::Answer;
+use crate::{utils::into_rc_rc, Answer};
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 fn ans_for_input(input: &str) -> Answer<usize, usize> {
@@ -9,10 +9,6 @@ fn ans_for_input(input: &str) -> Answer<usize, usize> {
 
 pub fn ans() -> Answer<usize, usize> {
 	ans_for_input(include_str!("input.txt"))
-}
-
-fn into_rc_rc<T>(x: T) -> Rc<RefCell<T>> {
-	Rc::new(RefCell::new(x))
 }
 
 type DirectoryContentsInProgress = BTreeMap<String, DirEntryInProgress>;
