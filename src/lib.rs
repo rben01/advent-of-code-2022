@@ -10,6 +10,8 @@
 	clippy::type_complexity
 )]
 
+mod utils;
+
 use std::fmt::{Debug, Display};
 
 pub type AocResult<T> = Result<T, String>;
