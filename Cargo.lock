@@ -9,6 +9,7 @@ dependencies = [
  "anyhow",
  "ndarray",
  "num",
+ "once_cell",
  "priority-queue",
  "regex",
  "strum",
@@ -161,6 +162,12 @@ checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
 dependencies = [
  "autocfg",
 ]
+
+[[package]]
+name = "once_cell"
+version = "1.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86f0b0d4bf799edbc74508c1e8bf170ff5f41238e5f8225603ca7caaae2b7860"
 
 [[package]]
 name = "priority-queue"
