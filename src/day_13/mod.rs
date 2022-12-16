@@ -7,7 +7,7 @@ use std::{cell::RefCell, rc::Rc, str::FromStr};
 
 fn ans_for_input(input: &str) -> Answer<usize, usize> {
 	let pp = read_input(input).expect("could not read input");
-	(12, (pt1(&pp), pt2(&pp))).into()
+	(13, (pt1(&pp), pt2(&pp))).into()
 }
 
 pub fn ans() -> Answer<usize, usize> {

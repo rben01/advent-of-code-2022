@@ -101,8 +101,8 @@ pub(crate) fn run_test<Input, AnsFunc, Actual, Expected>(
 	test_case: (AnsFunc, Expected),
 ) where
 	AnsFunc: Fn(Input) -> Actual,
-	Actual: Eq + Debug,
-	Expected: Eq + Debug + PartialEq<Actual>,
+	Actual: Debug,
+	Expected: Debug + PartialEq<Actual>,
 {
 	let (get_ans, expected) = test_case;
 	let actual = get_ans(input);
@@ -118,12 +118,20 @@ pub(crate) fn run_tests<Input, AnsFunc1, AnsFunc2, Actual1, Actual2, Expected1, 
 ) where
 	AnsFunc1: Fn(Input) -> Actual1,
 	AnsFunc2: Fn(Input) -> Actual2,
-	Actual1: Eq + Debug,
-	Actual2: Eq + Debug,
-	Expected1: Eq + Debug + PartialEq<Actual1>,
-	Expected2: Eq + Debug + PartialEq<Actual2>,
+	Actual1: Debug,
+	Actual2: Debug,
+	Expected1: Debug + PartialEq<Actual1>,
+	Expected2: Debug + PartialEq<Actual2>,
 	Input: Copy,
 {
 	run_test(input, test_case_1);
 	run_test(input, test_case_2);
+}
+
+#[macro_export]
+macro_rules! regex {
+	($re:literal $(,)?) => {{
+		static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+		RE.get_or_init(|| regex::Regex::new($re).unwrap())
+	}};
 }
