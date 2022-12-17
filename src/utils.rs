@@ -119,7 +119,7 @@ where
 			let tentative_dist = dist_from_start_to_here + dist_from_here_to_adj_node;
 			let new_dist = dists.entry(adj_node.borrow()).or_insert(tentative_dist);
 			*new_dist = tentative_dist.min(*new_dist);
-			unvisited.push_increase(adj_node, Priority::new_from_dist(tentative_dist));
+			unvisited.push_increase(adj_node, Priority::new_from_dist(*new_dist));
 		}
 	}
 
