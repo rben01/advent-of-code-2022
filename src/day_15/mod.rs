@@ -1,9 +1,6 @@
-use std::collections::BTreeSet;
-
-type Set<K> = BTreeSet<K>;
-
 // tag::setup[]
 use crate::Answer;
+use std::collections::BTreeSet;
 
 fn ans_for_input(input: &str) -> Answer<i64, i64> {
 	let map = read_input(input).expect("could not read input");
@@ -57,13 +54,13 @@ enum RangeInclusive {
 
 #[derive(Debug)]
 struct Intervals {
-	intervals: Set<Interval>,
+	intervals: BTreeSet<Interval>,
 }
 
 impl Intervals {
 	fn new() -> Self {
 		Self {
-			intervals: Set::new(),
+			intervals: BTreeSet::new(),
 		}
 	}
 
@@ -87,9 +84,10 @@ impl Intervals {
 	}
 
 	fn subtract_from(&self, interval: Interval) -> Intervals {
-		let mut remaining_intervals = Set::new();
+		let mut remaining_intervals = BTreeSet::new();
 
 		let mut subtractor_prev_left = interval.left;
+		// Note that self.intervals is sorted due to being a BTreeSet
 		for &interval_to_subtract in &self.intervals {
 			let Interval { left, right } = interval_to_subtract;
 			// should always be true except maybe for the first iteration

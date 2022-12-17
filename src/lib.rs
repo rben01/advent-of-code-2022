@@ -3,6 +3,7 @@
 #![feature(iterator_try_collect)]
 #![warn(clippy::pedantic)]
 #![allow(
+	clippy::too_many_lines,
 	clippy::enum_glob_use,
 	clippy::missing_panics_doc,
 	clippy::must_use_candidate,
