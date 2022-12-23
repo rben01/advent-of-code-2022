@@ -49,7 +49,7 @@ fn read_input(input: &str) -> Option<Volcano> {
 
 		assert!(
 			valves_by_name
-				.insert(valve_name.to_owned(), (i, flow_rate, adj_valves),)
+				.insert(valve_name.to_owned(), (i, flow_rate, adj_valves))
 				.is_none(),
 			"got duplicate valve {valve_name:?}"
 		);

@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use num::{Num, Zero};
+use num::{CheckedAdd, CheckedSub, Num, One, Zero};
 use priority_queue::PriorityQueue;
 use std::{
 	borrow::Borrow,
@@ -7,6 +7,7 @@ use std::{
 	cmp::{Ord, Ordering},
 	collections::HashMap,
 	hash::Hash,
+	ops::RangeBounds,
 	rc::Rc,
 };
 
@@ -16,11 +17,16 @@ pub fn into_rc_rc<T>(x: T) -> RcRc<T> {
 	Rc::new(RefCell::new(x))
 }
 
-pub fn get_nsew_adjacent(
-	pos: (usize, usize),
-	row_bounds: (usize, usize),
-	col_bounds: (usize, usize),
-) -> [Option<(usize, usize)>; 4] {
+pub fn get_nsew_adjacent<
+	RowT: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord,
+	ColT: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord,
+	RowRangeT: RangeBounds<RowT>,
+	ColRangeT: RangeBounds<ColT>,
+>(
+	pos: (RowT, ColT),
+	row_bounds: RowRangeT,
+	col_bounds: ColRangeT,
+) -> [Option<(RowT, ColT)>; 4] {
 	enum D {
 		MinusOne,
 		Zero,
@@ -29,8 +35,6 @@ pub fn get_nsew_adjacent(
 	use D::*;
 
 	let (row, col) = pos;
-	let (min_row, max_row) = row_bounds;
-	let (min_col, max_col) = col_bounds;
 
 	[
 		(MinusOne, Zero),
@@ -40,17 +44,17 @@ pub fn get_nsew_adjacent(
 	]
 	.map(|(dr, dc)| {
 		let new_row = match dr {
-			MinusOne => row.checked_sub(1)?,
+			MinusOne => row.checked_sub(&RowT::one())?,
 			Zero => row,
-			PlusOne => row + 1,
+			PlusOne => row.checked_add(&RowT::one())?,
 		};
 		let new_col = match dc {
-			MinusOne => col.checked_sub(1)?,
+			MinusOne => col.checked_sub(&ColT::one())?,
 			Zero => col,
-			PlusOne => col + 1,
+			PlusOne => col.checked_add(&ColT::one())?,
 		};
 
-		((min_row..=max_row).contains(&new_row) && (min_col..=max_col).contains(&new_col))
+		(row_bounds.contains(&new_row) && col_bounds.contains(&new_col))
 			.then_some((new_row, new_col))
 	})
 }
