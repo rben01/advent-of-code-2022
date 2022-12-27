@@ -11,7 +11,7 @@ fn ans_for_input(input: &str) -> Answer<Ans, Ans> {
 }
 
 pub fn ans() -> Answer<Ans, Ans> {
-	ans_for_input(include_str!("sample_input.txt"))
+	ans_for_input(include_str!("input.txt"))
 }
 
 type Ans = i64;
@@ -34,6 +34,7 @@ impl Point {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
 enum RockKind {
 	FourHorizontal,
 	FivePlusSign,
@@ -42,10 +43,28 @@ enum RockKind {
 	FourSquare,
 }
 
-impl RockKind {
-	const N_KINDS: usize = 5;
+impl From<usize> for RockKind {
+	fn from(value: usize) -> Self {
+		use RockKind::*;
+		match value % 5 {
+			0 => FourHorizontal,
+			1 => FivePlusSign,
+			2 => FiveBackwardsL,
+			3 => FourVertical,
+			4 => FourSquare,
+			_ => unreachable!("i % 5 must be in 0..=4"),
+		}
+	}
+}
 
-	const fn occupied_rel(self) -> &'static [Point] {
+impl RockKind {
+	const FIRST: Self = Self::FourHorizontal;
+
+	fn kind_after(self) -> Self {
+		Self::from((self as usize) + 1)
+	}
+
+	fn occupied_rel(self) -> &'static [Point] {
 		use Point as P;
 		use RockKind::*;
 		match self {
@@ -57,7 +76,7 @@ impl RockKind {
 		}
 	}
 
-	const fn left_edge_rel(self) -> &'static [Point] {
+	fn left_edge_rel(self) -> &'static [Point] {
 		use Point as P;
 		use RockKind::*;
 		match self {
@@ -69,7 +88,7 @@ impl RockKind {
 		}
 	}
 
-	const fn right_edge_rel(self) -> &'static [Point] {
+	fn right_edge_rel(self) -> &'static [Point] {
 		use Point as P;
 		use RockKind::*;
 		match self {
@@ -81,7 +100,7 @@ impl RockKind {
 		}
 	}
 
-	const fn bottom_edge_rel(self) -> &'static [Point] {
+	fn bottom_edge_rel(self) -> &'static [Point] {
 		use Point as P;
 		use RockKind::*;
 		match self {
@@ -93,7 +112,7 @@ impl RockKind {
 		}
 	}
 
-	const fn height(self) -> Y {
+	fn height(self) -> Y {
 		use RockKind::*;
 		match self {
 			FourHorizontal => 1,
@@ -166,72 +185,28 @@ impl TryFrom<char> for Jet {
 
 #[derive(Debug)]
 struct Chamber {
-	rock_seq: [RockKind; RockKind::N_KINDS],
 	jet_seq: Vec<Jet>,
 }
 
 impl Chamber {
 	fn new(gas_jet_seq: Vec<Jet>) -> Self {
-		use RockKind::*;
 		Self {
-			rock_seq: [
-				FourHorizontal,
-				FivePlusSign,
-				FiveBackwardsL,
-				FourVertical,
-				FourSquare,
-			],
 			jet_seq: gas_jet_seq,
 		}
 	}
 
-	fn rock_iter(&self, cycle: bool) -> RockIter {
-		RockIter {
-			chamber: self,
-			index: 0,
-			cycle,
-		}
-	}
-
-	fn jet_iter(&self, cycle: bool) -> JetIter {
+	fn jet_iter(&self) -> JetIter {
 		JetIter {
 			chamber: self,
 			index: 0,
-			cycle,
 		}
 	}
 }
 
-struct RockIter<'a> {
-	chamber: &'a Chamber,
-	index: usize,
-	cycle: bool,
-}
-
-impl Iterator for RockIter<'_> {
-	type Item = RockKind;
-	fn next(&mut self) -> Option<Self::Item> {
-		let Self {
-			chamber: Chamber { rock_seq, .. },
-			index,
-			cycle,
-		} = self;
-
-		let rock = *rock_seq.get(*index)?;
-
-		*index += 1;
-		if *cycle {
-			*index %= rock_seq.len();
-		}
-
-		Some(rock)
-	}
-}
-
+#[derive(Clone)]
 struct JetIter<'a> {
 	chamber: &'a Chamber,
 	index: usize,
-	cycle: bool,
 }
 
 impl Iterator for JetIter<'_> {
@@ -240,16 +215,10 @@ impl Iterator for JetIter<'_> {
 		let Self {
 			chamber: Chamber { jet_seq, .. },
 			index,
-			cycle,
 		} = self;
 
 		let jet = *jet_seq.get(*index)?;
-
 		*index += 1;
-		if *cycle {
-			*index %= jet_seq.len();
-		}
-
 		Some(jet)
 	}
 }
@@ -265,16 +234,18 @@ fn read_input(input: &str) -> Result<Chamber, String> {
 }
 
 fn solve(chamber: &Chamber, n: usize) -> Ans {
-	#[derive(Debug)]
-	enum DroppedRockState {
-		CameToRest,
-		PausedMidFall,
+	#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+	struct RoundStartInfo {
+		rock_kind: RockKind,
+		falling_rock_lower_left: Option<Point>,
+		rock_locs: Vec<Point>,
 	}
 
-	#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-	struct FrozenFormation {
-		rock_mid_fall: Option<DroppedRock>,
-		rock_locs: Vec<Point>,
+	#[derive(Debug, Default, Clone, Copy)]
+	struct RoundEndStats {
+		n_rocks_dropped: usize,
+		n_jets_fired: usize,
+		height_gained: Y,
 	}
 
 	#[derive(Debug)]
@@ -283,61 +254,115 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 		first_index: usize,
 	}
 
-	#[derive(Debug, Default, Clone, Copy)]
-	struct RoundInfo {
-		n_rocks_dropped: usize,
-		n_jets_fired: usize,
-		addtl_height: Y,
-	}
-
-	impl Add for RoundInfo {
+	impl Add for RoundEndStats {
 		type Output = Self;
 		fn add(self, rhs: Self) -> Self::Output {
 			Self {
 				n_rocks_dropped: self.n_rocks_dropped + rhs.n_rocks_dropped,
 				n_jets_fired: self.n_jets_fired + rhs.n_jets_fired,
-				addtl_height: self.addtl_height + rhs.addtl_height,
+				height_gained: self.height_gained + rhs.height_gained,
 			}
 		}
 	}
 
-	impl Sub for RoundInfo {
+	impl Sub for RoundEndStats {
 		type Output = Self;
 		fn sub(self, rhs: Self) -> Self::Output {
 			Self {
 				n_rocks_dropped: self.n_rocks_dropped - rhs.n_rocks_dropped,
 				n_jets_fired: self.n_jets_fired - rhs.n_jets_fired,
-				addtl_height: self.addtl_height - rhs.addtl_height,
+				height_gained: self.height_gained - rhs.height_gained,
 			}
 		}
 	}
 
-	impl Mul<usize> for RoundInfo {
+	impl Mul<usize> for RoundEndStats {
 		type Output = Self;
 		fn mul(self, rhs: usize) -> Self::Output {
 			Self {
 				n_rocks_dropped: self.n_rocks_dropped * rhs,
 				n_jets_fired: self.n_jets_fired * rhs,
-				addtl_height: self.addtl_height * Y::try_from(rhs).unwrap(),
+				height_gained: self.height_gained * Y::try_from(rhs).unwrap(),
 			}
 		}
 	}
 
-	#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-	struct DroppedRock {
-		rock_kind: RockKind,
-		lower_left: Point,
+	enum RockFinishedFalling {
+		Yes,
+		No,
 	}
 
-	#[derive(Debug)]
-	struct DroppedRockInfo {
-		dropped_rock: DroppedRock,
-		n_jets_fired: usize,
-		did_finish_round: bool,
+	struct StepInfo {
+		rock_kind: RockKind,
+		rock_locs: BTreeSet<Point>,
+		lower_left: Point,
+		this_run_y_max: Y,
 	}
 
 	fn is_blocked(rock_locs: &BTreeSet<Point>, point: Point) -> bool {
 		!(0..7).contains(&point.x()) || rock_locs.contains(&point)
+	}
+
+	fn fire_jet(jet: Jet, step_info: StepInfo) -> (RockFinishedFalling, StepInfo) {
+		let StepInfo {
+			mut rock_kind,
+			mut rock_locs,
+			mut lower_left,
+			mut this_run_y_max,
+		} = step_info;
+
+		let tentative_lower_left = lower_left.translated(jet.dx(), 0);
+		let tentative_rock = Rock::new(rock_kind, tentative_lower_left);
+		let tentative_leading_edge_is_blocked = match jet {
+			Jet::Left => tentative_rock
+				.left_edge()
+				.any(|p| is_blocked(&rock_locs, p)),
+			Jet::Right => tentative_rock
+				.right_edge()
+				.any(|p| is_blocked(&rock_locs, p)),
+		};
+		if !tentative_leading_edge_is_blocked {
+			lower_left = tentative_lower_left;
+		}
+
+		let tentative_lower_left = lower_left.translated(0, -1);
+		let tentative_rock = Rock::new(rock_kind, tentative_lower_left);
+		if tentative_rock
+			.bottom_edge()
+			.any(|p| is_blocked(&rock_locs, p))
+		{
+			// Rock came to rest
+			let settled_rock = Rock::new(rock_kind, lower_left);
+			rock_locs.extend(settled_rock.occupied());
+			this_run_y_max = this_run_y_max.max(lower_left.y() + rock_kind.height() - 1);
+
+			lower_left = Point(2, this_run_y_max + 4);
+
+			rock_kind = rock_kind.kind_after();
+
+			return (
+				RockFinishedFalling::Yes,
+				StepInfo {
+					rock_kind,
+					rock_locs,
+					lower_left,
+					this_run_y_max,
+				},
+			);
+		}
+
+		// Rock still falling
+		lower_left = tentative_lower_left;
+
+		(
+			RockFinishedFalling::No,
+			StepInfo {
+				rock_kind,
+				rock_locs,
+				lower_left,
+				this_run_y_max,
+			},
+		)
 	}
 
 	/// Use BFS to find all reachable points and remove any we can't reach from the
@@ -347,9 +372,10 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 	/// parts with the same shape (but perhaps at different heights) we can still
 	/// identify them as "the same". And also so that every starting formation's highest
 	/// point is 0, which means additional height = final height
+	#[must_use]
 	fn prune(
 		rock_locs: &BTreeSet<Point>,
-		rock_mid_fall: &mut Option<DroppedRock>,
+		rock_mid_fall_lower_left: Option<&mut Point>,
 		start: Point,
 	) -> BTreeSet<Point> {
 		// queue.first() is the back, queue.last() is the front
@@ -376,8 +402,8 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 		}
 
 		let y_max = rock_locs.iter().map(|p| p.y()).max().unwrap();
-		if let Some(rock_mid_fall) = rock_mid_fall.as_mut() {
-			rock_mid_fall.lower_left = rock_mid_fall.lower_left.translated(0, -y_max);
+		if let Some(rock_mid_fall_lower_left) = rock_mid_fall_lower_left {
+			*rock_mid_fall_lower_left = rock_mid_fall_lower_left.translated(0, -y_max);
 		}
 		rock_locs
 			.iter()
@@ -385,86 +411,16 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 			.collect()
 	}
 
-	/// Given an iterator over the jets, drop a single rock
-	fn drop_rock<Jets>(
-		formation: &BTreeSet<Point>,
-		rock_kind: RockKind,
-		p0: Point,
-		jet_enumerator: &mut Jets,
-		did_finish_round_pred: impl Fn(usize) -> bool,
-	) -> (DroppedRockState, DroppedRockInfo)
-	where
-		Jets: Iterator<Item = (usize, Jet)>,
-	{
-		let mut lower_left = p0;
-
-		for (n_jets_fired, (jet_idx, jet)) in (1..).zip(jet_enumerator) {
-			let tentative_lower_left = lower_left.translated(jet.dx(), 0);
-			let tentative_rock = Rock::new(rock_kind, tentative_lower_left);
-			let tentative_leading_edge_is_blocked = match jet {
-				Jet::Left => tentative_rock.left_edge().any(|p| is_blocked(formation, p)),
-				Jet::Right => tentative_rock
-					.right_edge()
-					.any(|p| is_blocked(formation, p)),
-			};
-			if !tentative_leading_edge_is_blocked {
-				lower_left = tentative_lower_left;
-			}
-			let did_finish_round = did_finish_round_pred(jet_idx);
-			dbg!(jet_idx, did_finish_round);
-
-			let tentative_lower_left = lower_left.translated(0, -1);
-			let tentative_rock = Rock::new(rock_kind, tentative_lower_left);
-			if tentative_rock
-				.bottom_edge()
-				.any(|p| is_blocked(formation, p))
-			{
-				return (
-					DroppedRockState::CameToRest,
-					DroppedRockInfo {
-						dropped_rock: DroppedRock {
-							rock_kind,
-							lower_left,
-						},
-						n_jets_fired,
-						did_finish_round,
-					},
-				);
-			}
-			lower_left = tentative_lower_left;
-
-			if did_finish_round {
-				return (
-					DroppedRockState::PausedMidFall,
-					DroppedRockInfo {
-						dropped_rock: DroppedRock {
-							rock_kind,
-							lower_left,
-						},
-						n_jets_fired,
-						did_finish_round,
-					},
-				);
-			}
-		}
-
-		unreachable!("unexpectedly exhausted the jet iterator")
-	}
-
 	#[must_use]
 	fn record_round(
-		orig_formation: Vec<Point>,
-		rock_mid_fall: Option<DroppedRock>,
+		orig_state: RoundStartInfo,
 		round_index: &mut usize,
-		round_stats: RoundInfo,
-		seen_formations: &mut BTreeMap<FrozenFormation, SeenFormationInfo>,
-		rounds_cumm_info: &mut Vec<RoundInfo>,
+		round_stats: RoundEndStats,
+		seen_formations: &mut BTreeMap<RoundStartInfo, SeenFormationInfo>,
+		rounds_cumm_info: &mut Vec<RoundEndStats>,
 	) -> Option<usize> {
 		let seen_formation_info = seen_formations
-			.entry(FrozenFormation {
-				rock_mid_fall,
-				rock_locs: orig_formation,
-			})
+			.entry(orig_state)
 			.or_insert(SeenFormationInfo {
 				count: 0,
 				first_index: *round_index,
@@ -473,11 +429,8 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 		seen_formation_info.count += 1;
 
 		let prev_round_cumm_stats = rounds_cumm_info.last().copied().unwrap_or_default();
-		let this_round_cumm_stats = RoundInfo {
-			n_rocks_dropped: prev_round_cumm_stats.n_rocks_dropped + round_stats.n_rocks_dropped,
-			n_jets_fired: prev_round_cumm_stats.n_jets_fired + round_stats.n_jets_fired,
-			addtl_height: prev_round_cumm_stats.addtl_height + round_stats.addtl_height,
-		};
+		let this_round_cumm_stats = prev_round_cumm_stats + round_stats;
+
 		rounds_cumm_info.push(this_round_cumm_stats);
 		*round_index += 1;
 
@@ -488,192 +441,121 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 		}
 	}
 
-	fn get_final_height(
-		n_rocks_max: usize,
-		net_rocks_dropped: usize,
-		rounds_cumm_info: &[RoundInfo],
-		cycle_first_index: usize,
-	) -> Y {
-		let start_info = rounds_cumm_info[cycle_first_index];
-		let end_info = rounds_cumm_info[rounds_cumm_info.len() - 1];
-		let per_cycle_info = end_info - start_info;
-
-		let cycle_len = rounds_cumm_info.len() - cycle_first_index;
-		let n_complete_cycles_remaining =
-			(n_rocks_max - net_rocks_dropped) / (per_cycle_info.n_rocks_dropped);
-
-		println!("{rounds_cumm_info:?}");
-		println!("{n_rocks_max}, {cycle_first_index}, {net_rocks_dropped}, {cycle_len:?}",);
-		println!(
-			"{per_cycle_info:?}, {n_complete_cycles_remaining:?}, {:?}",
-			start_info + per_cycle_info * n_complete_cycles_remaining
-		);
-
-		// println!(
-		// 	"{first_index:?}, {rounds_info:?}, {:?}, {cycle_len:?}, {}",
-		// 	rounds_info[*first_index],
-		// 	rounds_info.len()
-		// );
-		// println!("{formation_key:?}");
-
-		// let n_addtl_runs = (n - net_rocks_dropped) / n_rocks_dropped;
-		// println!("{n}, {net_rocks_dropped}, {n_rocks_dropped}, {n_addtl_runs}, {addtl_height}");
-		// net_height += addtl_height * (n_addtl_runs as i64);
-
-		0
-	}
-
 	let mut seen_formations = BTreeMap::new();
-	let mut rounds_cumm_info = Vec::<RoundInfo>::new();
-	let mut this_formation = (0..7).map(|x| Point(x, 0)).collect::<BTreeSet<_>>();
+	let mut rounds_cumm_info = Vec::new();
+	let mut rock_locs = (0..7).map(|x| Point(x, 0)).collect::<BTreeSet<_>>();
 
 	let mut net_height = 0;
 	let mut net_rocks_dropped = 0;
 
-	let mut jet_iter = chamber.jet_iter(true);
-	let mut rock_mid_fall: Option<DroppedRock> = None;
+	let mut rock_kind = RockKind::FIRST;
+	let mut falling_rock_lower_left = None;
 
-	let mut round_index = 0;
+	let mut run_index = 0;
 	while net_rocks_dropped < n {
-		let orig_rock_mid_fall = rock_mid_fall;
-		let orig_formation = this_formation.iter().copied().collect::<Vec<_>>();
-
-		let mut jet_enumerator = jet_iter.by_ref().enumerate();
-
-		let mut this_run_y_max = 0;
+		let mut this_run_y_max = 0; // enforced by `prune`
 		let mut this_run_n_rocks_dropped = 0;
 		let mut this_run_n_jets_fired = 0;
 
-		if let Some(DroppedRock {
+		let orig_state = RoundStartInfo {
 			rock_kind,
-			lower_left,
-		}) = rock_mid_fall
-		{
-			dbg!(rock_mid_fall);
-			let (
-				dr_state,
-				DroppedRockInfo {
-					dropped_rock,
-					n_jets_fired,
-					did_finish_round,
+			falling_rock_lower_left,
+			rock_locs: rock_locs.iter().copied().collect(),
+		};
+
+		let mut lower_left = falling_rock_lower_left.unwrap_or(Point(2, this_run_y_max + 4));
+
+		for jet in chamber.jet_iter() {
+			this_run_n_jets_fired += 1;
+
+			let rock_finished_falling;
+			(
+				rock_finished_falling,
+				StepInfo {
+					rock_kind,
+					rock_locs,
+					lower_left,
+					this_run_y_max,
 				},
-			) = drop_rock(
-				&this_formation,
-				rock_kind,
-				lower_left,
-				jet_enumerator.by_ref(),
-				|jet_idx| dbg!((jet_idx + 1) % chamber.jet_seq.len()) == 0,
-			);
-
-			this_run_n_jets_fired += n_jets_fired;
-
-			match dr_state {
-				DroppedRockState::CameToRest => {
-					let settled_rock = Rock::new(rock_kind, lower_left);
-					this_formation.extend(settled_rock.occupied());
-
-					this_run_y_max = this_run_y_max.max(lower_left.y() + rock_kind.height() - 1);
-					rock_mid_fall = None;
-				}
-				DroppedRockState::PausedMidFall => {
-					rock_mid_fall = Some(dropped_rock);
-				}
-			}
-
-			if did_finish_round {
-				if let Some(cycle_first_index) = record_round(
-					orig_formation,
-					orig_rock_mid_fall,
-					&mut round_index,
-					RoundInfo {
-						n_rocks_dropped: this_run_n_rocks_dropped,
-						n_jets_fired: this_run_n_jets_fired,
-						addtl_height: this_run_y_max,
-					},
-					&mut seen_formations,
-					&mut rounds_cumm_info,
-				) {
-					return get_final_height(
-						n,
-						net_rocks_dropped,
-						&rounds_cumm_info,
-						cycle_first_index,
-					);
-				};
-				continue;
-			}
-		}
-
-		'rocks: for (rock_idx, rock_kind) in chamber.rock_iter(true).enumerate() {
-			dbg!(rock_idx);
-
-			let (
-				dr_state,
-				DroppedRockInfo {
-					dropped_rock,
-					n_jets_fired,
-					did_finish_round,
-				},
-			) = drop_rock(
-				&this_formation,
-				rock_kind,
-				Point(2, this_run_y_max + 4),
-				jet_enumerator.by_ref(),
-				|jet_idx| {
-					dbg!((rock_idx + 1) % chamber.rock_seq.len()) == 0
-						&& dbg!((jet_idx + 1) % chamber.jet_seq.len()) == 0
+			) = fire_jet(
+				jet,
+				StepInfo {
+					rock_kind,
+					rock_locs,
+					lower_left,
+					this_run_y_max,
 				},
 			);
 
-			this_run_n_jets_fired += n_jets_fired;
-
-			match dr_state {
-				DroppedRockState::CameToRest => {
-					let settled_rock = Rock::new(rock_kind, dropped_rock.lower_left);
-					this_formation.extend(settled_rock.occupied());
-
-					rock_mid_fall = None;
+			if matches!(rock_finished_falling, RockFinishedFalling::Yes) {
+				this_run_n_rocks_dropped += 1;
+				net_rocks_dropped += 1;
+				if net_rocks_dropped >= n {
+					break;
 				}
-				DroppedRockState::PausedMidFall => {
-					rock_mid_fall = Some(dropped_rock);
-				}
-			}
-
-			this_run_y_max = this_run_y_max
-				.max(dropped_rock.lower_left.y() + dropped_rock.rock_kind.height() - 1);
-
-			this_run_n_rocks_dropped += 1;
-			net_rocks_dropped += 1;
-
-			if net_rocks_dropped >= n || did_finish_round {
-				break 'rocks;
 			}
 		}
-		// println!("nrd: {net_rocks_dropped}");
 
-		this_formation = prune(
-			&this_formation,
-			&mut rock_mid_fall,
+		rock_locs = prune(
+			&rock_locs,
+			falling_rock_lower_left.as_mut(),
 			Point(2, this_run_y_max + 1),
 		);
 
+		net_height += this_run_y_max;
+
 		if let Some(cycle_first_index) = record_round(
-			orig_formation,
-			orig_rock_mid_fall,
-			&mut round_index,
-			RoundInfo {
+			orig_state,
+			&mut run_index,
+			RoundEndStats {
 				n_rocks_dropped: this_run_n_rocks_dropped,
 				n_jets_fired: this_run_n_jets_fired,
-				addtl_height: this_run_y_max,
+				height_gained: this_run_y_max,
 			},
 			&mut seen_formations,
 			&mut rounds_cumm_info,
 		) {
-			return get_final_height(n, net_rocks_dropped, &rounds_cumm_info, cycle_first_index);
-		};
+			let start_info = rounds_cumm_info[cycle_first_index];
+			let end_info = rounds_cumm_info[rounds_cumm_info.len() - 1];
+			let per_cycle_info = end_info - start_info;
 
-		net_height += this_run_y_max;
-		println!("{:?}", seen_formations.len());
+			let n_complete_cycles_remaining =
+				(n - net_rocks_dropped) / (per_cycle_info.n_rocks_dropped);
+			let after_cycles_info = start_info + per_cycle_info * n_complete_cycles_remaining;
+			net_rocks_dropped = after_cycles_info.n_rocks_dropped;
+
+			let mut this_run_y_max = 0;
+			let mut lower_left = falling_rock_lower_left.unwrap_or(Point(2, this_run_y_max + 4));
+
+			for jet in chamber.jet_iter().cycle() {
+				let rock_finished_falling;
+				(
+					rock_finished_falling,
+					StepInfo {
+						rock_kind,
+						rock_locs,
+						lower_left,
+						this_run_y_max,
+					},
+				) = fire_jet(
+					jet,
+					StepInfo {
+						rock_kind,
+						rock_locs,
+						lower_left,
+						this_run_y_max,
+					},
+				);
+
+				if matches!(rock_finished_falling, RockFinishedFalling::Yes) {
+					net_rocks_dropped += 1;
+					if net_rocks_dropped >= n {
+						return (start_info + per_cycle_info * n_complete_cycles_remaining)
+							.height_gained + this_run_y_max;
+					}
+				}
+			}
+		}
 	}
 
 	net_height
@@ -708,7 +590,7 @@ mod test {
 		run_tests(
 			&read_input(include_str!("input.txt")).unwrap(),
 			(pt1, 3147),
-			(pt2, 2615),
+			(pt2, 1_532_163_742_758),
 		);
 	}
 }
