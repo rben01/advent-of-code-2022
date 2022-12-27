@@ -18,15 +18,15 @@ pub fn into_rc_rc<T>(x: T) -> RcRc<T> {
 }
 
 pub fn get_nsew_adjacent<
-	RowT: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord,
-	ColT: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord,
-	RowRangeT: RangeBounds<RowT>,
-	ColRangeT: RangeBounds<ColT>,
+	X: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + crate::Debug,
+	Y: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + crate::Debug,
+	XRangeT: RangeBounds<X> + crate::Debug,
+	YRangeT: RangeBounds<Y> + crate::Debug,
 >(
-	pos: (RowT, ColT),
-	row_bounds: RowRangeT,
-	col_bounds: ColRangeT,
-) -> [Option<(RowT, ColT)>; 4] {
+	pos_xy: (X, Y),
+	x_bounds: XRangeT,
+	y_bounds: YRangeT,
+) -> [Option<(X, Y)>; 4] {
 	enum D {
 		MinusOne,
 		Zero,
@@ -34,7 +34,7 @@ pub fn get_nsew_adjacent<
 	}
 	use D::*;
 
-	let (row, col) = pos;
+	let (x, y) = pos_xy;
 
 	[
 		(MinusOne, Zero),
@@ -42,20 +42,19 @@ pub fn get_nsew_adjacent<
 		(Zero, MinusOne),
 		(Zero, PlusOne),
 	]
-	.map(|(dr, dc)| {
-		let new_row = match dr {
-			MinusOne => row.checked_sub(&RowT::one())?,
-			Zero => row,
-			PlusOne => row.checked_add(&RowT::one())?,
+	.map(|(dx, dy)| {
+		let new_x = match dx {
+			MinusOne => x.checked_sub(&X::one())?,
+			Zero => x,
+			PlusOne => x.checked_add(&X::one())?,
 		};
-		let new_col = match dc {
-			MinusOne => col.checked_sub(&ColT::one())?,
-			Zero => col,
-			PlusOne => col.checked_add(&ColT::one())?,
+		let new_y = match dy {
+			MinusOne => y.checked_sub(&Y::one())?,
+			Zero => y,
+			PlusOne => y.checked_add(&Y::one())?,
 		};
 
-		(row_bounds.contains(&new_row) && col_bounds.contains(&new_col))
-			.then_some((new_row, new_col))
+		(x_bounds.contains(&new_x) && y_bounds.contains(&new_y)).then_some((new_x, new_y))
 	})
 }
 
