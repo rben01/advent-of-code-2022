@@ -1,6 +1,7 @@
 #![feature(binary_heap_into_iter_sorted)]
 #![feature(iter_array_chunks)]
 #![feature(iterator_try_collect)]
+#![feature(array_try_map)]
 #![warn(clippy::pedantic)]
 #![allow(
 	clippy::too_many_lines,
@@ -123,9 +124,9 @@ pub(crate) fn run_tests<Input, AnsFunc1, AnsFunc2, Actual1, Actual2, Expected1, 
 	Actual2: Debug,
 	Expected1: Debug + PartialEq<Actual1>,
 	Expected2: Debug + PartialEq<Actual2>,
-	Input: Copy,
+	Input: Clone,
 {
-	run_test(input, test_case_1);
+	run_test(input.clone(), test_case_1);
 	run_test(input, test_case_2);
 }
 
@@ -136,3 +137,27 @@ macro_rules! regex {
 		RE.get_or_init(|| regex::Regex::new($re).unwrap())
 	}};
 }
+
+#[macro_export]
+macro_rules! read_file {
+	($filename:literal) => {{
+		use std::path::{Path, PathBuf};
+		// `file!()` returns the path where `read_file!` is invoked, not the file where
+		// it's defined (this very file)
+		let file_relpath = Path::new(file!());
+
+		let child_path = [
+			Path::new(env!("CARGO_MANIFEST_DIR")),
+			file_relpath.parent().unwrap(),
+			Path::new($filename),
+		]
+		.into_iter()
+		.collect::<PathBuf>();
+
+		std::fs::read_to_string(child_path).unwrap()
+	}};
+}
+
+// fn read_file(filename: &str) -> String {
+
+// }

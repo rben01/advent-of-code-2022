@@ -6,6 +6,7 @@ use std::{
 	cell::RefCell,
 	cmp::{Ord, Ordering},
 	collections::HashMap,
+	fmt::Debug,
 	hash::Hash,
 	ops::RangeBounds,
 	rc::Rc,
@@ -18,10 +19,10 @@ pub fn into_rc_rc<T>(x: T) -> RcRc<T> {
 }
 
 pub fn get_nsew_adjacent<
-	X: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + crate::Debug,
-	Y: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + crate::Debug,
-	XRangeT: RangeBounds<X> + crate::Debug,
-	YRangeT: RangeBounds<Y> + crate::Debug,
+	X: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + std::fmt::Debug,
+	Y: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + std::fmt::Debug,
+	XRangeT: RangeBounds<X> + std::fmt::Debug,
+	YRangeT: RangeBounds<Y> + std::fmt::Debug,
 >(
 	pos_xy: (X, Y),
 	x_bounds: XRangeT,
@@ -58,6 +59,58 @@ pub fn get_nsew_adjacent<
 	})
 }
 
+pub fn get_xyz_adjacent<
+	X: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + Debug,
+	Y: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + Debug,
+	Z: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + Debug,
+	XRangeT: RangeBounds<X> + Debug,
+	YRangeT: RangeBounds<Y> + Debug,
+	ZRangeT: RangeBounds<Z> + Debug,
+>(
+	pos_xyz: impl Into<(X, Y, Z)>,
+	x_bounds: XRangeT,
+	y_bounds: YRangeT,
+	z_bounds: ZRangeT,
+) -> [Option<(X, Y, Z)>; 6] {
+	enum D {
+		MinusOne,
+		Zero,
+		PlusOne,
+	}
+	use D::*;
+
+	let (x, y, z) = pos_xyz.into();
+
+	[
+		(MinusOne, Zero, Zero),
+		(PlusOne, Zero, Zero),
+		(Zero, MinusOne, Zero),
+		(Zero, PlusOne, Zero),
+		(Zero, Zero, MinusOne),
+		(Zero, Zero, PlusOne),
+	]
+	.map(|(dx, dy, dz)| {
+		let new_x = match dx {
+			MinusOne => x.checked_sub(&X::one())?,
+			Zero => x,
+			PlusOne => x.checked_add(&X::one())?,
+		};
+		let new_y = match dy {
+			MinusOne => y.checked_sub(&Y::one())?,
+			Zero => y,
+			PlusOne => y.checked_add(&Y::one())?,
+		};
+		let new_z = match dz {
+			MinusOne => z.checked_sub(&Z::one())?,
+			Zero => z,
+			PlusOne => z.checked_add(&Z::one())?,
+		};
+
+		(x_bounds.contains(&new_x) && y_bounds.contains(&new_y) && z_bounds.contains(&new_z))
+			.then_some((new_x, new_y, new_z))
+	})
+}
+
 pub fn dijkstra<'a, K, Q, N>(
 	adjacencies: &'a HashMap<K, HashMap<K, N>>,
 	start: &'_ K,
@@ -90,12 +143,10 @@ where
 
 	impl<N_: Ord> Ord for Priority<N_> {
 		fn cmp(&self, other: &Self) -> Ordering {
-			match &self.dist {
-				None => Ordering::Less,
-				Some(my_dist) => match &other.dist {
-					None => Ordering::Greater,
-					Some(other_dist) => other_dist.cmp(my_dist),
-				},
+			match (&self.dist, &other.dist) {
+				(None, _) => Ordering::Less,
+				(_, None) => Ordering::Greater,
+				(Some(my_dist), Some(other_dist)) => other_dist.cmp(my_dist),
 			}
 		}
 	}

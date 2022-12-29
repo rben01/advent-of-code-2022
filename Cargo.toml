@@ -7,6 +7,7 @@
 
 [dependencies]
 	anyhow = "1.0.66"
+	itertools = "0.10.5"
 	ndarray = "0.15.6"
 	num = "0.4.0"
 	once_cell = "1.16.0"
@@ -68,4 +69,4 @@
 	day_23 = []
 	day_24 = []
 	day_25 = []
-	default = ["day_17"]
+	default = ["day_18"]
