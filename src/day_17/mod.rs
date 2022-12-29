@@ -116,9 +116,9 @@ impl RockKind {
 		use RockKind::*;
 		match self {
 			FourHorizontal => 1,
+			FourSquare => 2,
 			FivePlusSign | FiveBackwardsL => 3,
 			FourVertical => 4,
-			FourSquare => 2,
 		}
 	}
 }
@@ -217,7 +217,7 @@ impl Iterator for JetIter<'_> {
 			index,
 		} = self;
 
-		let jet = *jet_seq.get(*index)?;
+		let jet = *jet_seq.get(index)?;
 		*index += 1;
 		Some(jet)
 	}
@@ -414,7 +414,7 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 	#[must_use]
 	fn record_round(
 		orig_state: RoundStartInfo,
-		round_index: &mut usize,
+		round_index: usize,
 		round_stats: RoundEndStats,
 		seen_formations: &mut BTreeMap<RoundStartInfo, SeenFormationInfo>,
 		rounds_cumm_info: &mut Vec<RoundEndStats>,
@@ -423,7 +423,7 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 			.entry(orig_state)
 			.or_insert(SeenFormationInfo {
 				count: 0,
-				first_index: *round_index,
+				first_index: round_index,
 			});
 
 		seen_formation_info.count += 1;
@@ -432,7 +432,6 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 		let this_round_cumm_stats = prev_round_cumm_stats + round_stats;
 
 		rounds_cumm_info.push(this_round_cumm_stats);
-		*round_index += 1;
 
 		if seen_formation_info.count >= 2 {
 			Some(seen_formation_info.first_index)
@@ -451,8 +450,11 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 	let mut rock_kind = RockKind::FIRST;
 	let mut falling_rock_lower_left = None;
 
-	let mut run_index = 0;
-	while net_rocks_dropped < n {
+	for round_index in 0.. {
+		if net_rocks_dropped >= n {
+			break;
+		}
+
 		let mut this_run_y_max = 0; // enforced by `prune`
 		let mut this_run_n_rocks_dropped = 0;
 		let mut this_run_n_jets_fired = 0;
@@ -506,7 +508,7 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 
 		if let Some(cycle_first_index) = record_round(
 			orig_state,
-			&mut run_index,
+			round_index,
 			RoundEndStats {
 				n_rocks_dropped: this_run_n_rocks_dropped,
 				n_jets_fired: this_run_n_jets_fired,
@@ -515,13 +517,13 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 			&mut seen_formations,
 			&mut rounds_cumm_info,
 		) {
-			let start_info = rounds_cumm_info[cycle_first_index];
-			let end_info = rounds_cumm_info[rounds_cumm_info.len() - 1];
-			let per_cycle_info = end_info - start_info;
+			let pre_cycle_info = rounds_cumm_info[cycle_first_index];
+			let post_cycle_info = rounds_cumm_info[rounds_cumm_info.len() - 1];
+			let per_cycle_info = post_cycle_info - pre_cycle_info;
 
 			let n_complete_cycles_remaining =
 				(n - net_rocks_dropped) / (per_cycle_info.n_rocks_dropped);
-			let after_cycles_info = start_info + per_cycle_info * n_complete_cycles_remaining;
+			let after_cycles_info = pre_cycle_info + per_cycle_info * n_complete_cycles_remaining;
 			net_rocks_dropped = after_cycles_info.n_rocks_dropped;
 
 			let mut this_run_y_max = 0;
@@ -550,8 +552,7 @@ fn solve(chamber: &Chamber, n: usize) -> Ans {
 				if matches!(rock_finished_falling, RockFinishedFalling::Yes) {
 					net_rocks_dropped += 1;
 					if net_rocks_dropped >= n {
-						return (start_info + per_cycle_info * n_complete_cycles_remaining)
-							.height_gained + this_run_y_max;
+						return after_cycles_info.height_gained + this_run_y_max;
 					}
 				}
 			}
