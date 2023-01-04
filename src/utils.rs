@@ -60,18 +60,19 @@ pub fn get_nsew_adjacent<
 }
 
 pub fn get_xyz_adjacent<
-	X: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + Debug,
-	Y: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + Debug,
-	Z: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord + Debug,
-	XRangeT: RangeBounds<X> + Debug,
-	YRangeT: RangeBounds<Y> + Debug,
-	ZRangeT: RangeBounds<Z> + Debug,
+	X: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord,
+	Y: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord,
+	Z: Copy + Num + Zero + One + CheckedAdd + CheckedSub + Ord,
+	XRangeT: RangeBounds<X>,
+	YRangeT: RangeBounds<Y>,
+	ZRangeT: RangeBounds<Z>,
+	T: From<(X, Y, Z)> + Into<(X, Y, Z)>,
 >(
 	pos_xyz: impl Into<(X, Y, Z)>,
 	x_bounds: XRangeT,
 	y_bounds: YRangeT,
 	z_bounds: ZRangeT,
-) -> [Option<(X, Y, Z)>; 6] {
+) -> [Option<T>; 6] {
 	enum D {
 		MinusOne,
 		Zero,
@@ -107,7 +108,7 @@ pub fn get_xyz_adjacent<
 		};
 
 		(x_bounds.contains(&new_x) && y_bounds.contains(&new_y) && z_bounds.contains(&new_z))
-			.then_some((new_x, new_y, new_z))
+			.then_some(T::from((new_x, new_y, new_z)))
 	})
 }
 

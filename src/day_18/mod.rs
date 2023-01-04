@@ -1,9 +1,9 @@
-use itertools::iproduct;
-
 // tag::setup[]
 use crate::{read_file, utils::get_xyz_adjacent, Answer, ToResultDefaultErr};
-use std::{collections::BTreeSet, ops::RangeBounds, str::FromStr};
+use itertools::iproduct;
+use std::{collections::HashSet, ops::RangeBounds, str::FromStr};
 
+type Set<T> = HashSet<T>;
 type Ans = usize;
 
 fn ans_for_input(input: &str) -> Answer<Ans, Ans> {
@@ -17,13 +17,10 @@ pub fn ans() -> Answer<Ans, Ans> {
 
 type Num = i32;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Cube(Num, Num, Num);
 
 impl Cube {
-	fn as_tuple(self) -> (Num, Num, Num) {
-		(self.0, self.1, self.2)
-	}
 	fn x(self) -> Num {
 		self.0
 	}
@@ -75,13 +72,13 @@ fn read_input(input: &str) -> Result<Vec<Cube>, String> {
 
 // tag::pt1[]
 fn pt1(cubes: impl IntoIterator<Item = Cube>) -> Ans {
-	let cubes = cubes.into_iter().collect::<BTreeSet<_>>();
+	let cubes = cubes.into_iter().collect::<Set<_>>();
 
 	cubes
 		.iter()
-		.flat_map(|cube| get_xyz_adjacent(cube.as_tuple(), .., .., ..))
+		.flat_map(|&cube| get_xyz_adjacent(cube, .., .., ..))
 		.flatten()
-		.filter(|&coords| !cubes.contains(&coords.into()))
+		.filter(|&coords| !cubes.contains(&coords))
 		.count()
 }
 // end::pt1[]
@@ -107,30 +104,26 @@ fn pt2(cubes: impl IntoIterator<Item = Cube>) -> Ans {
 	/// a set of new points to add to `end_points`, or None if no path was found (`start`
 	/// is interior).
 	fn find_path(
-		cubes: &BTreeSet<Cube>,
+		cubes: &Set<Cube>,
 		start: Cube,
-		end_points: &BTreeSet<Cube>,
+		end_points: &Set<Cube>,
 		x_range: impl RangeBounds<Num>,
 		y_range: impl RangeBounds<Num>,
 		z_range: impl RangeBounds<Num>,
-	) -> Option<BTreeSet<Cube>> {
-		let mut seen = BTreeSet::new();
+	) -> Option<Set<Cube>> {
+		let mut seen = Set::new();
 		let mut queue = vec![start];
 
 		while let Some(point) = queue.pop() {
-			for adj in get_xyz_adjacent(point, .., .., ..)
-				.into_iter()
-				.flatten()
-				.map(Cube::from)
-			{
+			for adj in get_xyz_adjacent(point, .., .., ..).into_iter().flatten() {
 				if end_points.contains(&adj) {
 					return Some(seen);
 				}
 
 				if cubes.contains(&adj)
-					|| !seen.insert(adj) || !x_range.contains(&adj.x())
-					|| !y_range.contains(&adj.y())
-					|| !z_range.contains(&adj.z())
+					|| !seen.insert(adj) || !(x_range.contains(&adj.x())
+					&& y_range.contains(&adj.y())
+					&& z_range.contains(&adj.z()))
 				{
 					continue;
 				}
@@ -142,27 +135,21 @@ fn pt2(cubes: impl IntoIterator<Item = Cube>) -> Ans {
 		None
 	}
 
-	let cubes = cubes.into_iter().collect::<BTreeSet<_>>();
-	// The lexicographically first cube (lowest x, then lowest y, then lowest z)
+	let cubes = cubes.into_iter().collect::<Set<_>>();
 
 	// The initial exterior points: the eight corners bounding the cube
 	let (x_min, x_max) = get_range_bounds(cubes.iter().copied(), Cube::x);
 	let (y_min, y_max) = get_range_bounds(cubes.iter().copied(), Cube::y);
 	let (z_min, z_max) = get_range_bounds(cubes.iter().copied(), Cube::z);
 
-	let mut exterior_points = BTreeSet::new();
-	for (x, y, z) in iproduct!([x_min, x_max], [y_min, y_max], [z_min, z_max]) {
-		exterior_points.insert(Cube(x, y, z));
-	}
+	let mut exterior_points = iproduct!([x_min, x_max], [y_min, y_max], [z_min, z_max])
+		.map(Cube::from)
+		.collect();
 
 	let mut n_exposed_faces = 0;
 
 	for &cube in &cubes {
-		for face in get_xyz_adjacent(cube, .., .., ..)
-			.into_iter()
-			.flatten()
-			.map(Cube::from)
-		{
+		for face in get_xyz_adjacent(cube, .., .., ..).into_iter().flatten() {
 			if cubes.contains(&face) {
 				continue;
 			}

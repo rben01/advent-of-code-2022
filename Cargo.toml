@@ -69,4 +69,4 @@
 	day_23 = []
 	day_24 = []
 	day_25 = []
-	default = ["day_18"]
+	default = ["day_19"]

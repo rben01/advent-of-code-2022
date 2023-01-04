@@ -2,6 +2,7 @@
 #![feature(iter_array_chunks)]
 #![feature(iterator_try_collect)]
 #![feature(array_try_map)]
+#![feature(array_zip)]
 #![warn(clippy::pedantic)]
 #![allow(
 	clippy::too_many_lines,
@@ -132,7 +133,7 @@ pub(crate) fn run_tests<Input, AnsFunc1, AnsFunc2, Actual1, Actual2, Expected1, 
 
 #[macro_export]
 macro_rules! regex {
-	($re:literal $(,)?) => {{
+	($re:expr $(,)?) => {{
 		static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
 		RE.get_or_init(|| regex::Regex::new($re).unwrap())
 	}};
@@ -154,7 +155,8 @@ macro_rules! read_file {
 		.into_iter()
 		.collect::<PathBuf>();
 
-		std::fs::read_to_string(child_path).unwrap()
+		std::fs::read_to_string(&child_path)
+			.unwrap_or_else(|_| panic!("could not read file {child_path:?}"))
 	}};
 }
 
