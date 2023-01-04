@@ -160,6 +160,26 @@ macro_rules! read_file {
 	}};
 }
 
-// fn read_file(filename: &str) -> String {
+pub trait Cast {
+	fn cast<U>(self) -> U
+	where
+		Self: Copy + Debug + TryInto<U>,
+		<Self as TryInto<U>>::Error: Debug;
+}
 
-// }
+impl<T> Cast for T {
+	fn cast<U>(self) -> U
+	where
+		T: Copy + Debug + TryInto<U>,
+		<T as TryInto<U>>::Error: Debug,
+	{
+		self.try_into().unwrap_or_else(|e| {
+			panic!(
+				"could not convert {:?} to {:?} (original error: {:?})",
+				self,
+				std::any::type_name::<U>(),
+				e
+			)
+		})
+	}
+}
