@@ -3,6 +3,7 @@
 #![feature(iterator_try_collect)]
 #![feature(array_try_map)]
 #![feature(array_zip)]
+#![feature(box_into_inner)]
 #![warn(clippy::pedantic)]
 #![allow(
 	clippy::too_many_lines,

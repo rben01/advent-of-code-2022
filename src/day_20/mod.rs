@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 // tag::setup[]
 use crate::{read_file, Answer, Cast};
+use std::collections::HashMap;
 
 type Num = i64;
 type Ans = Num;
@@ -35,22 +34,14 @@ fn read_input(input: &str) -> Result<Vec<Elem>, String> {
 fn mix(nums: &mut Vec<Elem>, orig_nums: &[Elem]) {
 	let len = nums.len().cast::<Num>();
 	let mut positions = nums.iter().copied().zip(0_i64..).collect::<HashMap<_, _>>();
-	// println!("{:?}", nums.iter().map(|Elem(n, _)| *n).collect::<Vec<_>>());
 
 	for &e @ Elem(n, _) in orig_nums {
-		// dbg!("**");
 		if n == 0 {
 			continue;
 		}
 
 		let direction = if n < 0 { -1 } else { 1 };
 		let mut i = positions[&e];
-
-		// dbg!(n);
-		// dbg!(n.abs().rem_euclid(len));
-		// dbg!(i);
-		// dbg!((i + direction).rem_euclid(len));
-		// dbg!();
 
 		for _ in 0..(n.abs().rem_euclid(len - 1)) {
 			let prev = (i + direction).rem_euclid(len);
@@ -64,8 +55,6 @@ fn mix(nums: &mut Vec<Elem>, orig_nums: &[Elem]) {
 
 		nums[i.cast::<usize>()] = e;
 		positions.insert(e, i).unwrap();
-
-		// println!("{:?}", nums.iter().map(|Elem(n, _)| *n).collect::<Vec<_>>());
 	}
 }
 
@@ -117,12 +106,12 @@ mod test {
 		run_tests(
 			read_input(&read_file!("sample_input.txt")).unwrap(),
 			(pt1, 3),
-			(pt2, 0),
+			(pt2, 1_623_178_306),
 		);
 		run_tests(
 			read_input(&read_file!("input.txt")).unwrap(),
-			(pt1, 3147),
-			(pt2, 0),
+			(pt1, 10763),
+			(pt2, 4_979_911_042_808),
 		);
 	}
 }

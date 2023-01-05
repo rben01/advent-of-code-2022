@@ -185,16 +185,16 @@ mod test {
 				.unwrap()
 				.iter()
 				.copied(),
-			(pt1, 3068),
-			(pt2, 0),
+			(pt1, 64),
+			(pt2, 58),
 		);
 		run_tests(
 			read_input(&read_file!("input.txt"))
 				.unwrap()
 				.iter()
 				.copied(),
-			(pt1, 3147),
-			(pt2, 0),
+			(pt1, 3364),
+			(pt2, 2006),
 		);
 	}
 }
