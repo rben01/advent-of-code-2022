@@ -217,7 +217,7 @@ impl Iterator for JetIter<'_> {
 			index,
 		} = self;
 
-		let jet = *jet_seq.get(index)?;
+		let jet = *jet_seq.get(*index)?;
 		*index += 1;
 		Some(jet)
 	}

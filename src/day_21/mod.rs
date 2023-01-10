@@ -1,11 +1,10 @@
+// tag::setup[]
+use crate::{read_file, regex, Answer, ToResultDefaultErr};
 use std::{
 	collections::HashMap,
 	fmt::{Display, Write},
 	str::FromStr,
 };
-
-// tag::setup[]
-use crate::{read_file, regex, Answer, ToResultDefaultErr};
 
 type Num = i64;
 type Ans = Num;

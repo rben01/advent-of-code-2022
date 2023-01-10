@@ -162,6 +162,9 @@ macro_rules! read_file {
 }
 
 pub trait Cast {
+	/// Uses `try_into` to cast a number to another numeric type.
+	/// ## Panics
+	/// If the conversion fails (`try_into` returns an `Err`)
 	fn cast<U>(self) -> U
 	where
 		Self: Copy + Debug + TryInto<U>,
