@@ -180,3 +180,23 @@ where
 
 	dists
 }
+
+/// A trait used to wrap an array and provide `map` and `zip` over the wrapping type.
+/// Useful when using a newtype wrapper around an array.
+pub trait ArrayWrapper<const N: usize>: From<[Self::T; N]> {
+	type T;
+	type Me<U>: From<[U; N]> + ArrayWrapper<N, T = U>;
+
+	fn wrapped(self) -> [Self::T; N];
+
+	fn map<F, U>(self, f: F) -> Self::Me<U>
+	where
+		F: FnMut(Self::T) -> U,
+	{
+		Self::Me::from(self.wrapped().map(f))
+	}
+
+	fn zip<U>(self, rhs: Self::Me<U>) -> Self::Me<(Self::T, U)> {
+		Self::Me::from(self.wrapped().zip(rhs.wrapped()))
+	}
+}

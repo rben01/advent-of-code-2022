@@ -11,7 +11,8 @@
 	clippy::missing_panics_doc,
 	clippy::must_use_candidate,
 	clippy::redundant_closure_for_method_calls,
-	clippy::type_complexity
+	clippy::type_complexity,
+	clippy::similar_names
 )]
 
 mod utils;

@@ -1,10 +1,17 @@
 // tag::setup[]
-use crate::{read_file, utils::get_nsew_adjacent, Answer, Cast};
+use crate::{
+	read_file,
+	utils::{get_nsew_adjacent, ArrayWrapper},
+	Answer, Cast,
+};
 use itertools::iproduct;
 use ndarray::prelude::{Array2, ArrayView2};
-use std::{collections::HashMap, ops::Index};
-use strum::EnumCount;
-use strum_macros::EnumCount;
+use std::{
+	collections::HashMap,
+	ops::{Index, IndexMut},
+};
+use strum::{EnumCount, IntoEnumIterator};
+use strum_macros::{EnumCount, EnumIter};
 
 type Coord = i32;
 type Ans = i32;
@@ -15,18 +22,22 @@ fn ans_for_input(input: &str) -> Answer<Ans, Ans> {
 }
 
 pub fn ans() -> Answer<Ans, Ans> {
-	ans_for_input(&read_file!("sample_input.txt"))
+	ans_for_input(&read_file!("input.txt"))
 }
 
-#[derive(Debug, Clone, Copy)]
+/// A compass heading
+#[derive(Debug, Clone, Copy, EnumCount, PartialEq, Eq)]
+#[repr(usize)]
 enum Heading {
 	N,
-	S,
 	E,
+	S,
 	W,
 }
 
 impl Heading {
+	const CW_FROM_N: [Self; Self::COUNT] = [Self::N, Self::E, Self::S, Self::W];
+
 	fn value(self) -> Ans {
 		use Heading::*;
 		match self {
@@ -37,28 +48,50 @@ impl Heading {
 		}
 	}
 
-	fn turned_left(self) -> Self {
+	/// `N -> W -> S -> E -> N`
+	fn turned_left(self, n_times: usize) -> Self {
 		use Heading::*;
-		match self {
-			N => W,
-			W => S,
-			S => E,
-			E => N,
+		let mut ans = self;
+		for _ in 0..n_times {
+			ans = match ans {
+				N => W,
+				W => S,
+				S => E,
+				E => N,
+			}
 		}
+		ans
 	}
 
-	fn turned_right(self) -> Self {
+	/// `N -> E -> S -> W -> N`
+	fn turned_right(self, n_times: usize) -> Self {
 		use Heading::*;
-		match self {
-			N => E,
-			E => S,
-			S => W,
-			W => N,
+		let mut ans = self;
+		for _ in 0..n_times {
+			ans = match ans {
+				N => E,
+				E => S,
+				S => W,
+				W => N,
+			}
 		}
+		ans
+	}
+
+	/// The number of 90° clockwise turns it would take to get from `from` to `self`.
+	/// ## Examples
+	/// ```rust
+	/// assert_eq!(3, N.dist_clockwise(E));
+	/// ```
+	fn dist_clockwise(self, from: Self) -> usize {
+		let a = self as usize;
+		let b = from as usize;
+
+		a.checked_sub(b).unwrap_or(a + Heading::COUNT - b)
 	}
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Tile {
 	Aether,
 	Open,
@@ -145,7 +178,7 @@ fn read_input(input: &str) -> Result<Map, String> {
 			let tile = c.try_into()?;
 			tiles.push(tile);
 
-			if !matches!(tile, Tile::Aether) {
+			if tile != Tile::Aether {
 				let row_range = &mut row_ranges[row_idx];
 				row_range.lo = row_range.lo.min(col_idx.cast());
 				row_range.hi = row_range.hi.max(col_idx.cast());
@@ -194,6 +227,9 @@ fn read_input(input: &str) -> Result<Map, String> {
 	})
 }
 
+fn value(row: Coord, col: Coord, heading: Heading) -> Ans {
+	1000 * (row + 1) + 4 * (col + 1) + heading.value()
+}
 // end::setup[]
 
 // tag::pt1[]
@@ -211,7 +247,7 @@ fn pt1(map: &Map) -> Ans {
 	let mut col = grid
 		.row(0)
 		.iter()
-		.position(|tile| matches!(tile, Tile::Open))
+		.position(|&tile| tile == Tile::Open)
 		.expect("no open tile found in first row")
 		.cast::<Coord>();
 	let mut heading = Heading::E;
@@ -228,12 +264,12 @@ fn pt1(map: &Map) -> Ans {
 					// enough to loop)
 					let n_steps_after_loop = n_steps - n_steps_before_loop;
 
-					let sign = if matches!(heading, N) { -1 } else { 1 };
+					let sign = if heading == N { -1 } else { 1 };
 
 					let lo = range.lo;
 					for _ in 0..n_steps_before_loop {
 						let next_r = lo + (row - lo + sign).rem_euclid(range.size());
-						if matches!(grid[[next_r.cast(), col.cast()]], Tile::Solid) {
+						if grid[[next_r.cast(), col.cast()]] == Tile::Solid {
 							continue 'this_step;
 						}
 						row = next_r;
@@ -248,12 +284,12 @@ fn pt1(map: &Map) -> Ans {
 					let n_steps_before_loop = n_steps.min(range.size());
 					let n_steps_after_loop = n_steps - n_steps_before_loop;
 
-					let sign = if matches!(heading, W) { -1 } else { 1 };
+					let sign = if heading == W { -1 } else { 1 };
 
 					let lo = range.lo;
 					for _ in 0..n_steps_before_loop {
 						let next_c = lo + (col - lo + sign).rem_euclid(range.size());
-						if matches!(grid[[row.cast(), next_c.cast()]], Tile::Solid) {
+						if grid[[row.cast(), next_c.cast()]] == Tile::Solid {
 							continue 'this_step;
 						}
 						col = next_c;
@@ -264,12 +300,12 @@ fn pt1(map: &Map) -> Ans {
 						.cast();
 				}
 			},
-			Step::TurnLeft => heading = heading.turned_left(),
-			Step::TurnRight => heading = heading.turned_right(),
+			Step::TurnLeft => heading = heading.turned_left(1),
+			Step::TurnRight => heading = heading.turned_right(1),
 		}
 	}
 
-	1000 * (row + 1) + 4 * (col + 1) + heading.value()
+	value(row, col, heading)
 }
 // end::pt1[]
 
@@ -277,7 +313,7 @@ fn pt1(map: &Map) -> Ans {
 /// A direction, positive (`p`) or negative (`n`), along an axis (`X`, `Y`, or `Z`).
 /// E.g., `Xp` represents pointing along the positive x-axis, `Zn` along the negative
 /// z-axis, etc.
-#[derive(Debug, Clone, Copy, EnumCount, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, EnumCount, PartialEq, Eq, Hash, EnumIter)]
 #[repr(usize)]
 enum Direction {
 	/// The -x direction
@@ -294,6 +330,10 @@ enum Direction {
 	Zp,
 }
 
+/// One of six revolutions of the cube about its center that moves Zp to another face.
+/// There are actually seven total — the identity, four for the adjacent faces, and
+/// *two* ways to move Zp to Zn — but we only include one of the two ways that gets Zp
+/// to Zn (the one that revolves about the X axis).
 #[derive(Debug, Clone, Copy)]
 enum RevolutionMovingZp {
 	Identity,
@@ -305,18 +345,6 @@ enum RevolutionMovingZp {
 }
 
 impl RevolutionMovingZp {
-	fn inverted(self) -> Self {
-		use RevolutionMovingZp::*;
-		match self {
-			Identity => Identity,
-			ZpToXn => ZpToXp,
-			ZpToXp => ZpToXn,
-			ZpToYn => ZpToYp,
-			ZpToYp => ZpToYn,
-			ZpToZnAboutX => ZpToZnAboutX,
-		}
-	}
-
 	/// Apply this revolution to the given direction
 	fn apply(self, dir: Direction) -> Direction {
 		use Direction::*;
@@ -334,25 +362,17 @@ impl RevolutionMovingZp {
 	}
 }
 
+/// A rotation of the cube about the Z axis, oriented so that Zp points into our face,
+/// measured in quarter turns clockwise as we look down at the Zp face
 #[derive(Debug, Clone, Copy)]
 enum RotationAboutZp {
 	Zero,
-	OneQuarterCcw,
+	OneQuarterCw,
 	HalfTurn,
-	ThreeQuartersCcw,
+	ThreeQuartersCw,
 }
 
 impl RotationAboutZp {
-	fn inverted(self) -> Self {
-		use RotationAboutZp::*;
-		match self {
-			Zero => Zero,
-			OneQuarterCcw => ThreeQuartersCcw,
-			HalfTurn => HalfTurn,
-			ThreeQuartersCcw => OneQuarterCcw,
-		}
-	}
-
 	/// Apply this rotation to the given direction
 	fn apply(self, dir: Direction) -> Direction {
 		use Direction::*;
@@ -360,16 +380,20 @@ impl RotationAboutZp {
 
 		match (dir, self) {
 			(_, Zero) => dir,
-			(Xp, HalfTurn) | (Yn, OneQuarterCcw) | (Yp, ThreeQuartersCcw) => Xn,
-			(Xn, HalfTurn) | (Yn, ThreeQuartersCcw) | (Yp, OneQuarterCcw) => Xp,
-			(Xn, ThreeQuartersCcw) | (Xp, OneQuarterCcw) | (Yp, HalfTurn) => Yn,
-			(Xn, OneQuarterCcw) | (Xp, ThreeQuartersCcw) | (Yn, HalfTurn) => Yp,
+			(Xp, HalfTurn) | (Yn, OneQuarterCw) | (Yp, ThreeQuartersCw) => Xn,
+			(Xn, HalfTurn) | (Yn, ThreeQuartersCw) | (Yp, OneQuarterCw) => Xp,
+			(Xn, ThreeQuartersCw) | (Xp, OneQuarterCw) | (Yp, HalfTurn) => Yn,
+			(Xn, OneQuarterCw) | (Xp, ThreeQuartersCw) | (Yn, HalfTurn) => Yp,
 			(Zn, _) => Zn,
 			(Zp, _) => Zp,
 		}
 	}
 }
 
+/// A transformation of the cube, modeled as a revolution (moving the Zp face elsewhere)
+/// followed by a rotation (about Zp, whereever it was moved to). There are 24 total
+/// transformations: move Zp to one of the six faces, then orient it in one of the four
+/// orientations.
 #[derive(Debug, Clone, Copy)]
 struct Transformation {
 	revolution: RevolutionMovingZp,
@@ -385,14 +409,6 @@ impl Transformation {
 
 		rotation.apply(revolution.apply(dir))
 	}
-
-	fn apply_inverse(self, dir: Direction) -> Direction {
-		let Self {
-			revolution,
-			rotation,
-		} = self;
-		rotation.inverted().apply(revolution.inverted().apply(dir))
-	}
 }
 
 /// An oriented face of the cube; it's on one side of the cube, and its compass's North
@@ -404,6 +420,10 @@ struct CubeFace {
 }
 
 impl CubeFace {
+	fn fail(side: Direction, north: Direction) -> ! {
+		panic!("side {side:?} cannot have its North pointing toward {north:?}")
+	}
+
 	fn from_adjacent_face(side: Direction, north: Direction, prev_face_adj_edge: Heading) -> Self {
 		use Direction::*;
 		use Heading::*;
@@ -440,7 +460,7 @@ impl CubeFace {
 			(Xn, Yp, E) | (Xp, Yp, W) | (Yn, Zp, N) | (Yp, Zn, S) => (Zp, Yp),
 
 			(Xn | Xp, Xn | Xp, _) | (Yn | Yp, Yn | Yp, _) | (Zn | Zp, Zn | Zp, _) => {
-				panic!("invalid combination of (prev) face and north: {side:?}, {north:?}")
+				CubeFace::fail(side, north)
 			}
 		};
 
@@ -448,18 +468,6 @@ impl CubeFace {
 			side: my_side,
 			north: my_north,
 		}
-	}
-
-	fn apply(self, transformation: Transformation) -> Self {
-		let Self { side, north } = self;
-		let [side, north] = [side, north].map(|dir| transformation.apply(dir));
-		Self { side, north }
-	}
-
-	fn apply_inverse(self, transformation: Transformation) -> Self {
-		let Self { side, north } = self;
-		let [side, north] = [side, north].map(|dir| transformation.apply_inverse(dir));
-		Self { side, north }
 	}
 
 	/// Get the transformation that gets `self`'s `side` to be `Zp` and its `north` to be
@@ -483,8 +491,8 @@ impl CubeFace {
 
 		// rotate the revoled north to get it to point to Yp
 		let rotation = match revolution.apply(north) {
-			Xn => OneQuarterCcw,
-			Xp => ThreeQuartersCcw,
+			Xn => OneQuarterCw,
+			Xp => ThreeQuartersCw,
 			Yn => HalfTurn,
 			Yp => Zero,
 			Zn | Zp => panic!(
@@ -497,66 +505,125 @@ impl CubeFace {
 			rotation,
 		}
 	}
-
-	/// Get the face on the cube adjacent to face `face_idx`'s `heading` edge
-	fn get_side_of_adjacent_face(self, at_heading: Heading) -> Direction {
-		use Direction::*;
-		use Heading::*;
-
-		// The side that would be at `at_heading` if we were centralized
-		let side_at_heading = match at_heading {
-			N => Yp,
-			S => Yn,
-			E => Xp,
-			W => Xn,
-		};
-
-		// But we're not centralized, so apply the inverse transform to get back to
-		// reality
-
-		self.get_centralizing_transform()
-			.apply_inverse(side_at_heading)
-	}
-
-	// fn get_relative_heading_of_adjacent_face(
-	// 	self,
-	// 	at_heading: Heading,
-	// 	adj_face_north: Direction,
-	// ) -> Heading {
-	// 	use Direction::*;
-	// 	use Heading::*;
-
-	// 	let Self { side, north } = self;
-	// 	let adj_face_side = self.get_side_of_adjacent_face(at_heading);
-	// 	// let relative_north = match (side, adj_face_side, (north, adj_face_north)) {
-	// 	// 	(Xn, Yn, ()) => N,
-	// 	// 	(Xn | Xp, Xn | Xp, _) | (Yn | Yp, Yn | Yp, _) | (Zn | Zp, Zn | Zp, _) => {
-	// 	// 		panic!("adjacent face was not actually adjacent")
-	// 	// 	}
-	// 	// };
-
-	// 	todo!()
-	// }
 }
 
-// #[derive(Debug, Clone, Copy)]
-// struct AbstractCube {
-// 	/// The side length of the cube — the faces in the grid will be `side_len * side_len`
-// 	/// tiles
-// 	side_len: usize,
-// 	/// The faces of the cube; `faces[i]` is a pair...
-// 	/// 1. Whose first element is the side and North direction of face `i` (the
-// 	/// assignment of indices to faces is more or less arbitrary), and...
-// 	/// 2. Whose second element is the location in the grid (`[row, col]`) of face `i`,
-// 	/// *after* the grid has been divvied up into sub-areas of size `side_len *
-// 	/// side_len`. So the cube's bottommost face in the grid might have a `row`-index of,
-// 	/// say, 3 or 4, and not `3 * side_len` or `4 * side_len`.
-// 	faces: [CubeFace; Direction::COUNT],
-// 	/// If `direction: Direction`, then `face_indices[direction as usize]` is the index
-// 	/// (as would be used to index `faces`) of the `direction` face of the cube
-// 	face_indices: [usize; Direction::COUNT],
-// }
+/// Data on an adjacent face (for any given other face). Contains the relative heading
+/// of the adjacent face — if you unfolded the cube to lay flat, and the given face and
+/// its adjacent face were adjacent in this unfolding, what would the heading of the
+/// adjacent face be relative to the given face's North? — and which side of the cube it
+/// is.
+#[derive(Debug, Clone, Copy)]
+struct AdjFace {
+	/// The heading of this adjacent face relative to current face's North
+	relative_heading: Heading,
+	/// The side of the cube this adjacent face is on
+	side: Direction,
+}
 
+/// Data pertaining to the four faces adjacent to a given face. Indexable by `Heading`.
+#[derive(Debug, Clone, Copy)]
+struct AdjacentFaces<T>([T; Heading::COUNT]);
+
+impl<T> From<[T; Heading::COUNT]> for AdjacentFaces<T> {
+	fn from(value: [T; Heading::COUNT]) -> Self {
+		Self(value)
+	}
+}
+
+impl<A> ArrayWrapper<{ Heading::COUNT }> for AdjacentFaces<A> {
+	type T = A;
+	type Me<U> = AdjacentFaces<U>;
+
+	fn wrapped(self) -> [Self::T; Heading::COUNT] {
+		self.0
+	}
+}
+
+impl<T> Index<Heading> for AdjacentFaces<T> {
+	type Output = T;
+
+	fn index(&self, index: Heading) -> &Self::Output {
+		&self.0[index as usize]
+	}
+}
+
+impl<T> IndexMut<Heading> for AdjacentFaces<T> {
+	fn index_mut(&mut self, index: Heading) -> &mut Self::Output {
+		&mut self.0[index as usize]
+	}
+}
+
+/// Info pertaining to a given face of the cube: info on the adjacent faces, and
+/// coordinates of this face in the original (flattened) grid.
+#[derive(Debug, Clone, Copy)]
+struct FaceDatum {
+	/// Info on the adjacent faces: which side of the cube they're on and which way
+	/// they're facing, relative to this face.
+	adjacent_faces: AdjacentFaces<AdjFace>,
+	/// The location in the grid (`[row, col]`) of face `i`, *after* the grid has been
+	/// divvied up into sub-areas of size `side_len * side_len`. So the cube's bottommost
+	/// face in the grid might have a `row`-index of, say, 3 or 4, and not `3 * side_len`
+	/// or `4 * side_len`.
+	loc_in_grid: [Coord; 2],
+}
+
+/// Data pertaining to the six faces of the cube. Indexable by `Direction`.
+#[derive(Debug, Clone, Copy)]
+struct Faces<T>([T; Direction::COUNT]);
+
+impl<T> From<[T; Direction::COUNT]> for Faces<T> {
+	fn from(value: [T; Direction::COUNT]) -> Self {
+		Self(value)
+	}
+}
+
+impl<A> ArrayWrapper<{ Direction::COUNT }> for Faces<A> {
+	type T = A;
+	type Me<U> = Faces<U>;
+
+	fn wrapped(self) -> [Self::T; Direction::COUNT] {
+		self.0
+	}
+}
+
+impl<T> Faces<T> {
+	fn map<F, U>(self, f: F) -> Faces<U>
+	where
+		F: FnMut(T) -> U,
+	{
+		Faces(self.0.map(f))
+	}
+
+	fn zip<U>(self, rhs: Faces<U>) -> Faces<(T, U)> {
+		Faces(self.0.zip(rhs.0))
+	}
+}
+
+impl<T: Copy> Faces<T> {
+	/// Make a new array filled with `init`
+	fn filled(with: T) -> Self {
+		Self([with; Direction::COUNT])
+	}
+}
+
+impl<T> Index<Direction> for Faces<T> {
+	type Output = T;
+
+	fn index(&self, index: Direction) -> &Self::Output {
+		&self.0[index as usize]
+	}
+}
+
+impl<T> IndexMut<Direction> for Faces<T> {
+	fn index_mut(&mut self, index: Direction) -> &mut Self::Output {
+		&mut self.0[index as usize]
+	}
+}
+
+/// The whole shebang: a representation of the cube we've been given, both laid flat and
+/// folded up into an actual 3D cube. Knows its side length, the 2D grid it was
+/// constructed from, and most importantly, all of its faces' data: which side they're
+/// on and how they're oriented relative to the faces adjacent to them.
 #[derive(Debug, Clone, Copy)]
 struct Cube<'a> {
 	/// The side length of the cube — the faces in the grid will be `side_len * side_len`
@@ -565,34 +632,24 @@ struct Cube<'a> {
 	/// The original grid of tiles that the faces of this cube were laid flat on by
 	/// unfolding the cube
 	grid: ArrayView2<'a, Tile>,
-	/// `grid_faces[i]` is the location in the grid (`[row, col]`) of face `i`, *after*
-	/// the grid has been divvied up into sub-areas of size `side_len * side_len`. So the
-	/// cube's bottommost face in the grid might have a `row`-index of, say, 3 or 4, and
-	/// not `3 * side_len` or `4 * side_len`.
-	face_locs_in_grid: [[Coord; 2]; Direction::COUNT],
-	/// `faces[i]` is the side and North direction of face `i` (the assignment of indices
-	/// to faces is more or less arbitrary)
-	faces: [CubeFace; Direction::COUNT],
+	/// `face_data[direction]` is datum for face `direction`
+	face_data: Faces<FaceDatum>,
 }
 
-// impl Index<usize> for Cube<'_> {
-// 	type Output = CubeFace;
-
-// 	fn index(&self, index: usize) -> &Self::Output {
-// 		&self.faces[index]
-// 	}
-// }
-
-// impl Index<Direction> for Cube<'_> {
-// 	type Output = (usize, CubeFace);
-
-// 	fn index(&self, index: Direction) -> &Self::Output {
-// 		let idx = self.face_indices[index as usize];
-// 		&(idx, self.faces[idx])
-// 	}
-// }
-
 impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
+	/// Builds a Cube from a 2D grid
+	///
+	/// Tl;dr, the method is:
+	/// 1. Chop the grid into face-sized pieces.
+	/// 2. Arbitrarily position the first face we find (leftmost in the first nonempty
+	///    row) to be Zp pointing toward Yp.
+	/// 3. For each face after the first face, record its position relative to a face
+	///    we've already positioned (we bfs to move from known faces to not-yet-known
+	///    faces) in order to figure out which face of the cube it is and how it's oriented.
+	/// 4. Reorder the list of faces so that we can index with a `Direction`, i.e., the
+	///    face on side `Direction::iter().nth(i).unwrap()` is at index `i`.
+	/// 5. Go through the faces, which we now know the positions and orientations of, and
+	///    get the relative headings of the faces adjacent to them.
 	fn from(grid: ArrayView2<'a, Tile>) -> Self {
 		use Direction::*;
 		use Heading::*;
@@ -610,10 +667,7 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 		}
 
 		let side_len = {
-			let face_area = grid
-				.iter()
-				.filter(|&tile| !matches!(tile, Tile::Aether))
-				.count() / 6;
+			let face_area = grid.iter().filter(|&&tile| tile != Tile::Aether).count() / 6;
 			// A very silly way to find `sqrt(face_area)`
 			(1..=face_area).find(|n| n * n == face_area).unwrap()
 		};
@@ -621,24 +675,24 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 		let face_grid_n_rows = grid.nrows() / side_len;
 		let face_grid_n_cols = grid.ncols() / side_len;
 		// Where in the original grid (the input) the faces of the cube lie
-		let (face_grid_loc_to_idx, face_locs_in_grid) = {
+		let face_grid_loc_to_idx = {
 			let mut face_grid_locs = [[0; 2]; Direction::COUNT];
 			let mut face_grid_loc_to_idx = HashMap::with_capacity(Direction::COUNT);
 			let mut idx = 0;
 
 			for (r, c) in iproduct!(0..face_grid_n_rows, 0..face_grid_n_cols) {
-				if !matches!(grid[[r * side_len, c * side_len]], Tile::Aether) {
+				if grid[[r * side_len, c * side_len]] != Tile::Aether {
 					let loc = [r.cast(), c.cast()];
 					face_grid_locs[idx] = loc;
 					assert!(face_grid_loc_to_idx.insert(loc, idx).is_none());
 					idx += 1;
 				}
 			}
-			(face_grid_loc_to_idx, face_grid_locs)
+			face_grid_loc_to_idx
 		};
 
 		// Array of CubeFace; starts with impossible dummy data
-		let mut faces = [CubeFace {
+		let mut faces_unordered = [CubeFace {
 			side: Yp,
 			north: Yp,
 		}; Direction::COUNT];
@@ -656,8 +710,9 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 			}
 		};
 
+		// bfs the grid of cubes, filling in new faces based on their position relative to
+		// the face they were adjacent to
 		let mut stack = vec![top_face];
-
 		let mut seen = [false; Direction::COUNT];
 		while let Some(PartialFaceDatum {
 			idx,
@@ -666,9 +721,10 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 		}) = stack.pop()
 		{
 			let new_face = if idx == 0 {
+				// the famed "centralized" face
 				CubeFace {
-					side: Yp,
-					north: Zn,
+					side: Zp,
+					north: Yp,
 				}
 			} else {
 				let prev_face_pos = [r - dr, c - dc];
@@ -676,14 +732,14 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 					*face_grid_loc_to_idx.get(&prev_face_pos).unwrap_or_else(|| {
 						panic!(
 							"logic error: face at {prev_face_pos:?} was \
-					 None ((r, dr, c, dc) = {:?})",
+							 None ((r, dr, c, dc) = {:?})",
 							(r, dr, c, dc)
 						)
 					});
 				let CubeFace {
 					side: prev_side,
 					north: prev_north,
-				} = faces[prev_face_idx];
+				} = faces_unordered[prev_face_idx];
 
 				let prev_face_adj_edge = match [dr, dc] {
 					[-1, 0] => N,
@@ -696,7 +752,7 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 				CubeFace::from_adjacent_face(prev_side, prev_north, prev_face_adj_edge)
 			};
 
-			faces[idx] = new_face;
+			faces_unordered[idx] = new_face;
 
 			for (adj_r, adj_c) in get_nsew_adjacent((r, c), .., ..).into_iter().flatten() {
 				if let Some(&new_idx) = face_grid_loc_to_idx.get(&[adj_r, adj_c]) {
@@ -713,295 +769,274 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 			}
 		}
 
+		// At this point, `faces` is sorted more or less arbitrarily. Now we'll put it in
+		// the order specified by the variants of `Direction`
+
+		let mut grid_locs = Faces::filled(None);
+		let mut norths = Faces::filled(None);
+
+		for (loc, idx) in face_grid_loc_to_idx {
+			let CubeFace { side, north } = faces_unordered[idx];
+			norths[side] = Some(north);
+			grid_locs[side] = Some(loc);
+		}
+
+		let grid_locs = grid_locs.map(|o| o.unwrap());
+		let norths = norths.map(|o| o.unwrap());
+
+		// For each face of the cube, get the four adjacent faces and their relative
+		// headings
+		let mut adjacent_faces = Faces::filled(None);
+		for side in Direction::iter() {
+			/// Given four sides in clockwise order, rotate them so that `first` is first
+			fn get_ordered_adj_sides(
+				mut sides_cw: [Direction; Heading::COUNT],
+				first: Direction,
+			) -> AdjacentFaces<Direction> {
+				let idx = sides_cw.iter().position(|&side| side == first).unwrap();
+				sides_cw.rotate_left(idx);
+				AdjacentFaces(sides_cw)
+			}
+
+			let north = norths[side];
+
+			// To minimize the number of cases we need to check, we'll do all of our work
+			// on the "centralized" face, and transform the adjacent faces with the same
+			// transformation. This works because the relative headings are invariant under
+			// transformations of the cube. This should reduce the amount of code we have
+			// to write by approximately a factor of 6.
+
+			let centralizing_transform = CubeFace { side, north }.get_centralizing_transform();
+
+			// The basic structure here is we list the four adjacent sides of each face in
+			// clockwise order (looking at the face from outside the cube), beginning with
+			// an arbitrary face, and then rotate the list as needed so that it lines up
+			// with current face's North, so that it lists the faces at [N, E, S, W].
+			let adj_sides_nsew = match side {
+				Xn => get_ordered_adj_sides([Yn, Zn, Yp, Zp], north),
+				Xp => get_ordered_adj_sides([Yn, Zp, Yp, Zn], north),
+				Yn => get_ordered_adj_sides([Xn, Zp, Xp, Zn], north),
+				Yp => get_ordered_adj_sides([Xn, Zn, Xp, Zp], north),
+				Zn => get_ordered_adj_sides([Xn, Yn, Xp, Yp], north),
+				Zp => get_ordered_adj_sides([Xn, Yp, Xp, Yn], north),
+			};
+
+			let adj_sides_relative_headings = Heading::CW_FROM_N.map(|at_heading| {
+				// Treat everything as if it were relative to the centralized face — this
+				// massively reduces the amount of code we have to write
+				let untransformed_adj_side = adj_sides_nsew[at_heading];
+				let adj_north = centralizing_transform.apply(norths[untransformed_adj_side]);
+				let adj_side = centralizing_transform.apply(untransformed_adj_side);
+
+				// beautiful cyclic structure here, both within and between cases
+				match (at_heading, (adj_side, adj_north)) {
+					(N, (_, Zn))
+					| (E, (Xn, Yn) | (Yn, Xp) | (Xp, Yp) | (Yp, Xn))
+					| (S, (_, Zp))
+					| (W, (Xn, Yp) | (Yp, Xp) | (Xp, Yn) | (Yn, Xn)) => N,
+
+					(N, (Xn, Yp) | (Yp, Xp) | (Xp, Yn) | (Yn, Xn))
+					| (E, (_, Zn))
+					| (S, (Xn, Yn) | (Yn, Xp) | (Xp, Yp) | (Yp, Xn))
+					| (W, (_, Zp)) => E,
+
+					(N, (_, Zp))
+					| (E, (Xn, Yp) | (Yp, Xp) | (Xp, Yn) | (Yn, Xn))
+					| (S, (_, Zn))
+					| (W, (Xn, Yn) | (Yn, Xp) | (Xp, Yp) | (Yp, Xn)) => S,
+
+					(N, (Xn, Yn) | (Yn, Xp) | (Xp, Yp) | (Yp, Xn))
+					| (E, (_, Zp))
+					| (S, (Xn, Yp) | (Yp, Xp) | (Xp, Yn) | (Yn, Xn))
+					| (W, (_, Zn)) => W,
+
+					(_, (Xn | Xp, Xn | Xp) | (Yn | Yp, Yn | Yp)) => {
+						CubeFace::fail(adj_side, adj_north)
+					}
+					(_, (Zn | Zp, _)) => unreachable!(),
+				}
+			});
+
+			let adj_sides_relative_headings = AdjacentFaces(adj_sides_relative_headings);
+
+			adjacent_faces[side] = Some(adj_sides_relative_headings.zip(adj_sides_nsew).map(
+				|(relative_heading, side)| AdjFace {
+					relative_heading,
+					side,
+				},
+			));
+		}
+
+		let adjacent_faces = adjacent_faces.map(|o| o.unwrap());
+
+		let face_data = grid_locs
+			.zip(adjacent_faces)
+			.map(|(loc_in_grid, adjacent_faces)| FaceDatum {
+				adjacent_faces,
+				loc_in_grid,
+			});
+
 		Cube {
 			side_len,
 			grid,
-			face_locs_in_grid,
-			faces,
+			face_data,
 		}
 	}
 }
 
+/// The state as we travel through the cube: which side we're on, our coordinates on
+/// that side (relative to the side's own top-left corner), and which direction we're
+/// heading.
+#[derive(Debug, Clone, Copy)]
+struct TravelState {
+	side: Direction,
+	point: [Coord; 2],
+	heading: Heading,
+}
+
 impl Cube<'_> {
-	fn index_of_face_at_side(&self, side: Direction) -> usize {
-		self.faces
-			.iter()
-			.enumerate()
-			.find_map(|(i, cf)| (cf.side == side).then_some(i))
-			.unwrap_or_else(|| panic!("cube {self:?} had no face at side {side:?}"))
+	fn get_grid_coords(&self, side: Direction, point: [Coord; 2]) -> [usize; 2] {
+		let &Self {
+			side_len,
+			face_data,
+			grid: _,
+		} = self;
+		face_data[side]
+			.loc_in_grid
+			.zip(point)
+			.map(|(face_coord, offset)| (face_coord * side_len.cast::<Coord>() + offset).cast())
 	}
 
-	/// Given a point in the coordinates of one face, transform the point onto an
-	/// adjacent face by wrapping it around the two faces' common edge. The adjacent face
-	/// is determined by the point itself — if it's beyond the north edge of the current
-	/// face, then it wraps to the face adjacent to the given face's north edge, etc.
-	/// ## Panics
-	/// If the point does not lie on the "plus sign" formed by extending the given face
-	/// a length `side_len` horizontally and vertically, as this plus sign is the surface
-	/// that wraps onto adjacent faces cleanly
-	fn wrap_to_next_face(&self, face_idx: usize, point: [Coord; 2]) -> [Coord; 2] {
-		use Direction::*;
+	fn tile_at(&self, side: Direction, point: [Coord; 2]) -> Tile {
+		let coords = self.get_grid_coords(side, point);
+		self.grid.get(coords).copied().unwrap_or(Tile::Aether)
+	}
+
+	/// Try to step forward one space, wrapping around the edge of the cube as needed.
+	/// Returns the new `TravelState` (wrapped in `Some`) if we succeeded in moving
+	/// forward. Otherwise, we hit a solid tile and didn't move, and this returns `None`.
+	fn step_forward(&self, travel_state: TravelState) -> Option<TravelState> {
 		use Heading::*;
 
-		enum Thirds {
-			First,
-			Second,
-			Third,
-		}
-
-		fn fail_plus_sign() -> ! {
-			panic!(r#"`wrap_to_next_face` was given a point not on the sacred "plus sign""#)
-		}
+		let TravelState {
+			point: [r, c],
+			side,
+			heading,
+		} = travel_state;
 
 		let &Self {
-			side_len, faces, ..
+			side_len,
+			face_data,
+			grid: _,
 		} = self;
 		let side_len = side_len.cast::<Coord>();
+		let face = face_data[side];
 
-		let face = faces[face_idx];
-
-		// The valid plus sign is five faces of a slightly larger 3x3 grid; here we get
-		// the ranges of each third of this grid
-		let ranges = [
-			(-side_len..0, Thirds::First),
-			(0..side_len, Thirds::Second),
-			(side_len..2 * side_len, Thirds::Third),
-		];
-
-		let [r_third, c_third] = point.map(|coord| {
-			ranges
-				.iter()
-				.find_map(|(range, third)| range.contains(&coord).then_some(third))
-		});
-
-		let (Some(r_third), Some(c_third)) = (r_third, c_third) else {
-			fail_plus_sign();
+		let [dr, dc] = match heading {
+			N => [-1, 0],
+			E => [0, 1],
+			S => [1, 0],
+			W => [0, -1],
 		};
-		let heading_to_adj_face = match (r_third, c_third) {
-			(Thirds::Second, Thirds::Second) => return point, // no wrapping at all
-			(Thirds::First, Thirds::Second) => N,
-			(Thirds::Second, Thirds::First) => W,
-			(Thirds::Second, Thirds::Third) => E,
-			(Thirds::Third, Thirds::Second) => S,
-			_ => fail_plus_sign(),
-		};
+		let new_r = r + dr;
+		let new_c = c + dc;
 
-		let adj_face_side = face.get_side_of_adjacent_face(heading_to_adj_face);
-		let adj_face_index = self.index_of_face_at_side(adj_face_side);
-		let adj_face_north = faces[adj_face_index].north;
+		let tentative_state = if [new_r, new_c]
+			.into_iter()
+			.all(|x| (0..side_len).contains(&x))
+		{
+			// Remain on same face
+			TravelState {
+				side,
+				point: [new_r, new_c],
+				heading,
+			}
+		} else {
+			// We've gone over the edge and wrapped around to another face
 
-		// If this face were centralized, then...
-		let transform = face.get_centralizing_transform();
+			// new_r and new_c as they would be on the adjacent face we're wrapping to, if
+			// said face's North were the same direction as the current face's
+			let [unrotated_r, unrotated_c] = match heading {
+				N => [new_r + side_len, new_c],
+				E => [new_r, new_c - side_len],
+				S => [new_r - side_len, new_c],
+				W => [new_r, new_c + side_len],
+			};
 
-		let wrapped_point = {
-			let adj_face_north = transform.apply(adj_face_north);
-			let s = side_len; // short for side_len
-			let m = s - 1; // the maximum index of a side, which is side_len - 1
-			let [r, c] = point;
+			let AdjFace {
+				relative_heading: adj_relative_heading,
+				side: adj_side,
+			} = face.adjacent_faces[heading];
 
-			match (heading_to_adj_face, adj_face_north) {
-				(N, Xn) => [c, -r - 1],
-				(N, Xp) => [-c + m, r - s],
-				(N, Zn) => [r + s, c],
-				(N, Zp) => [-r - 1, -c + m],
-				(S, Xn) => todo!(),
-				(S, Xp) => todo!(),
-				(S, Zn) => todo!(),
-				(S, Zp) => todo!(),
-				(E, Yn) => todo!(),
-				(E, Yp) => todo!(),
-				(E, Zn) => todo!(),
-				(E, Zp) => todo!(),
-				(W, Yn) => todo!(),
-				(W, Yp) => todo!(),
-				(W, Zn) => todo!(),
-				(W, Zp) => todo!(),
+			// But said face's North need not be the same direction as the current face's,
+			// so adjust for the heading of the adjacent face we're moving to
+			let max_idx = side_len - 1;
+			let rotated_rc = match adj_relative_heading {
+				N => [unrotated_r, unrotated_c],
+				E => [max_idx - unrotated_c, unrotated_r],
+				S => [max_idx - unrotated_r, max_idx - unrotated_c],
+				W => [unrotated_c, max_idx - unrotated_r],
+			};
 
-				(N | S, Yn | Yp) | (E | W, Xn | Xp) => {
-					panic!(
-						"the face at {h:?} was pointing {a:?}, which is impossible",
-						h = heading_to_adj_face,
-						a = adj_face_north
-					)
-				}
+			let n_turns_cw = heading.dist_clockwise(adj_relative_heading);
+			let new_heading = N.turned_right(n_turns_cw);
+
+			TravelState {
+				side: adj_side,
+				point: rotated_rc,
+				heading: new_heading,
 			}
 		};
 
-		// But it's not, so:
-
-		// match (heading_to_adj_face, adj_face_north) {
-		// 	(N, Xn) => todo!(),
-		// 	(N, Xp) => todo!(),
-		// 	(N, Yn) => todo!(),
-		// 	(N, Yp) => todo!(),
-		// 	(N, Zn) => todo!(),
-		// 	(N, Zp) => todo!(),
-		// 	(S, Xn) => todo!(),
-		// 	(S, Xp) => todo!(),
-		// 	(S, Yn) => todo!(),
-		// 	(S, Yp) => todo!(),
-		// 	(S, Zn) => todo!(),
-		// 	(S, Zp) => todo!(),
-		// 	(E, Xn) => todo!(),
-		// 	(E, Xp) => todo!(),
-		// 	(E, Yn) => todo!(),
-		// 	(E, Yp) => todo!(),
-		// 	(E, Zn) => todo!(),
-		// 	(E, Zp) => todo!(),
-		// 	(W, Xn) => todo!(),
-		// 	(W, Xp) => todo!(),
-		// 	(W, Yn) => todo!(),
-		// 	(W, Yp) => todo!(),
-		// 	(W, Zn) => todo!(),
-		// 	(W, Zp) => todo!(),
-		// }
-
-		todo!()
+		match self.tile_at(tentative_state.side, tentative_state.point) {
+			Tile::Aether => {
+				unreachable!("logic error: should not be at an aether tile after wrapping faces")
+			}
+			Tile::Open => Some(tentative_state),
+			Tile::Solid => None,
+		}
 	}
 }
 
 fn pt2(map: &Map) -> Ans {
-	// impl Cube {
-	// 	fn face_at(self, row: i32, col: i32) -> Direction {
-	// 		use Direction::*;
-	// 		let side_len = self.0;
-	// 		match (row / side_len, col / side_len) {
-	// 			(0, 1) => Yp,
-	// 			(0, 2) => Xp,
-	// 			(1, 1) => Zn,
-	// 			(2, 0) => Xn,
-	// 			(2, 1) => Yn,
-	// 			(3, 0) => Zp,
-	// 			_ => panic!(
-	// 				"invalid face: {rc:?} (side_len={side_len})",
-	// 				rc = (row, col)
-	// 			),
-	// 		}
-	// 	}
-
-	// 	fn translate_btwn_faces(
-	// 		self,
-	// 		face_row: i32,
-	// 		face_col: i32,
-	// 		from: Direction,
-	// 		to: Direction,
-	// 	) -> (i32, i32) {
-	// 		let edges = from.adj_edges(to);
-	// 		let side_len = self.0;
-	// 		let max_idx = side_len - 1;
-	// 		match edges {
-	// 			(N, S) | (S, N) | (E, W) | (W, E) => (face_row, face_col),
-
-	// 			(N, N) => (1 - face_row, max_idx - face_col),
-	// 			(W, W) => (max_idx - face_row, 1 - face_col),
-	// 			(S, S) => (side_len + max_idx - face_row, max_idx - face_col),
-	// 			(E, E) => (max_idx - face_row, side_len + max_idx - face_col),
-
-	// 			(N, E) | (S, W) => (max_idx - face_col, face_row - side_len),
-	// 			(E, N) | (W, S) => (face_col - side_len, max_idx - face_row),
-
-	// 			(N, W) => (face_col, max_idx - side_len - face_row),
-	// 			(W, N) => (face_col - side_len, face_row),
-	// 			(S, E) => (face_col, side_len + max_idx - face_row),
-	// 			(E, S) => (side_len + max_idx - face_col, face_row),
-	// 		}
-	// 	}
-
-	// 	fn rel_to_abs(self, face: Direction, face_row: i32, face_col: i32) -> (i32, i32) {
-	// 		let (row_idx, col_idx) = face.row_col_index();
-	// 		let abs_row = row_idx * self.0 + face_row;
-	// 		let abs_col = col_idx * self.0 + face_col;
-	// 		(abs_row, abs_col)
-	// 	}
-
-	// 	fn abs_to_rel(self, face: Direction, abs_row: i32, abs_col: i32) -> (i32, i32) {
-	// 		let (face_row_idx, face_col_idx) = face.row_col_index();
-	// 		let face_first_row = face_row_idx * self.0;
-	// 		let face_first_col = face_col_idx * self.0;
-	// 		(abs_row - face_first_row, abs_col - face_first_col)
-	// 	}
-	// }
+	use Direction::*;
+	use Heading::*;
 
 	let Map { grid, steps, .. } = map;
 
 	let cube = Cube::from(grid.view());
-	println!("{cube:?}");
 
-	// println!("{face_grid:?}");
-	// println!("{cube:?}");
+	// By construction, the Zp face of the cube contains the starting point
+	let mut curr_state = TravelState {
+		side: Zp,
+		point: [0, 0],
+		heading: E,
+	};
 
-	// let cube = Cube(0);
+	for step in steps {
+		match step {
+			&Step::Forward(n) => {
+				for _ in 0..n {
+					let Some(next_state) = cube.step_forward(curr_state) else {
+						break;
+					};
+					curr_state = next_state;
+				}
+			}
+			Step::TurnLeft => curr_state.heading = curr_state.heading.turned_left(1),
+			Step::TurnRight => curr_state.heading = curr_state.heading.turned_right(1),
+		}
+	}
 
-	// let mut row = 0_i32;
-	// let mut col = grid
-	// 	.row(0)
-	// 	.iter()
-	// 	.position(|tile| matches!(tile, Tile::Open))
-	// 	.expect("no open tile found in first row")
-	// 	.cast::<i32>();
+	let TravelState {
+		side,
+		point,
+		heading,
+	} = curr_state;
 
-	// let n_rows = grid.nrows().cast::<i32>();
-	// let n_cols = grid.ncols().cast::<i32>();
+	let [row, col] = cube.get_grid_coords(side, point).map(|x| x.cast());
 
-	// let mut heading = Heading::E;
-
-	// 'this_step: for step in steps {
-	// 	println!("{:?}", (row, col));
-	// 	match step {
-	// 		&Step::Forward(n_steps) => {
-	// 			for _ in 0..n_steps {
-	// 				let dr = match heading {
-	// 					N => -1,
-	// 					S => 1,
-	// 					E | W => 0,
-	// 				};
-	// 				let dc = match heading {
-	// 					W => -1,
-	// 					E => 1,
-	// 					N | S => 0,
-	// 				};
-
-	// 				let mut new_row = row + dr;
-	// 				let mut new_col = col + dc;
-
-	// 				let new_tile =
-	// 					if (0..n_rows).contains(&new_row) && (0..n_cols).contains(&new_col) {
-	// 						grid[[new_row.cast(), new_col.cast()]]
-	// 					} else {
-	// 						Tile::Aether
-	// 					};
-
-	// 				println!("{:?}", ((row, col), (new_row, new_col), new_tile));
-
-	// 				match new_tile {
-	// 					Tile::Open => {}
-	// 					Tile::Solid => continue 'this_step,
-	// 					Tile::Aether => {
-	// 						let curr_face = cube.face_at(row, col);
-	// 						let new_face = curr_face.face_at_heading(heading);
-	// 						let (curr_face_row, curr_face_col) =
-	// 							cube.abs_to_rel(curr_face, new_row, new_col);
-	// 						let (new_face_row, new_face_col) = cube.translate_btwn_faces(
-	// 							curr_face_row,
-	// 							curr_face_col,
-	// 							curr_face,
-	// 							new_face,
-	// 						);
-	// 						(new_row, new_col) =
-	// 							cube.rel_to_abs(new_face, new_face_row, new_face_col);
-	// 					}
-	// 				}
-
-	// 				row = new_row;
-	// 				col = new_col;
-	// 			}
-	// 		}
-	// 		Step::TurnLeft => heading = heading.turned_left(),
-	// 		Step::TurnRight => heading = heading.turned_right(),
-	// 	}
-	// }
-
-	0
+	value(row, col, heading)
 }
 // end::pt2[]
 
@@ -1016,12 +1051,12 @@ mod test {
 		run_tests(
 			&read_input(&read_file!("sample_input.txt")).unwrap(),
 			(pt1, 6032),
-			(pt2, 301),
+			(pt2, 5031),
 		);
 		run_tests(
 			&read_input(&read_file!("input.txt")).unwrap(),
 			(pt1, 1484),
-			(pt2, 123),
+			(pt2, 142_228),
 		);
 	}
 }
