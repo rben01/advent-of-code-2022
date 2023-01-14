@@ -345,6 +345,17 @@ enum RevolutionMovingZp {
 }
 
 impl RevolutionMovingZp {
+	fn inverse(self) -> Self {
+		use RevolutionMovingZp::*;
+		match self {
+			Identity | ZpToZnAboutX => self,
+			ZpToXn => ZpToXp,
+			ZpToXp => ZpToXn,
+			ZpToYn => ZpToYp,
+			ZpToYp => ZpToYn,
+		}
+	}
+
 	/// Apply this revolution to the given direction
 	fn apply(self, dir: Direction) -> Direction {
 		use Direction::*;
@@ -373,6 +384,15 @@ enum RotationAboutZp {
 }
 
 impl RotationAboutZp {
+	fn inverse(self) -> Self {
+		use RotationAboutZp::*;
+		match self {
+			Zero | HalfTurn => self,
+			OneQuarterCw => ThreeQuartersCw,
+			ThreeQuartersCw => OneQuarterCw,
+		}
+	}
+
 	/// Apply this rotation to the given direction
 	fn apply(self, dir: Direction) -> Direction {
 		use Direction::*;
@@ -401,13 +421,23 @@ struct Transformation {
 }
 
 impl Transformation {
+	/// Apply `self.revolution`, then `self.rotation`
 	fn apply(self, dir: Direction) -> Direction {
 		let Self {
 			revolution,
 			rotation,
 		} = self;
-
 		rotation.apply(revolution.apply(dir))
+	}
+
+	/// Apply the inverse of `self` (which we never compute explicitly) by applying the
+	/// inverse of `self.rotation`, then the inverse of `self.revolution`
+	fn apply_inverse(self, dir: Direction) -> Direction {
+		let Self {
+			revolution,
+			rotation,
+		} = self;
+		revolution.inverse().apply(rotation.inverse().apply(dir))
 	}
 }
 
@@ -420,54 +450,27 @@ struct CubeFace {
 }
 
 impl CubeFace {
-	fn fail(side: Direction, north: Direction) -> ! {
-		panic!("side {side:?} cannot have its North pointing toward {north:?}")
-	}
-
-	fn from_adjacent_face(side: Direction, north: Direction, prev_face_adj_edge: Heading) -> Self {
+	/// Construct a `CubeFace` from the face it's adjacent to in the flat grid and the
+	/// edge of the previous face it's adjacent to. To reduce the amount of work we have
+	/// to do, we transform the previous face to be "centralized", use the adjacent edge
+	/// to figure out what this face would be, and then apply the inverse transform to
+	/// the face.
+	fn from_adjacent_face(prev_face: CubeFace, prev_face_adj_edge: Heading) -> Self {
 		use Direction::*;
 		use Heading::*;
 
-		let (my_side, my_north) = match (side, north, prev_face_adj_edge) {
-			(Yn, Xp, S) | (Yp, Xn, N) | (Zn, Yn, W) | (Zp, Yn, E) => (Xn, Yn),
-			(Yn, Xn, N) | (Yp, Xp, S) | (Zn, Yp, E) | (Zp, Yp, W) => (Xn, Yp),
-			(Yn, Zp, W) | (Yp, Zp, E) | (Zn, Xn, N) | (Zp, Xp, S) => (Xn, Zp),
-			(Yn, Zn, E) | (Yp, Zn, W) | (Zn, Xp, S) | (Zp, Xn, N) => (Xn, Zn),
+		let centralizing_transform = prev_face.get_centralizing_transform();
 
-			(Yn, Xn, S) | (Yp, Xp, N) | (Zn, Yn, E) | (Zp, Yn, W) => (Xp, Yn),
-			(Yn, Xp, N) | (Yp, Xn, S) | (Zn, Yp, W) | (Zp, Yp, E) => (Xp, Yp),
-			(Yn, Zn, W) | (Yp, Zn, E) | (Zn, Xn, S) | (Zp, Xp, N) => (Xp, Zn),
-			(Yn, Zp, E) | (Yp, Zp, W) | (Zn, Xp, N) | (Zp, Xn, S) => (Xp, Zp),
-
-			(Xn, Yp, S) | (Xp, Yn, N) | (Zn, Xn, E) | (Zp, Xn, W) => (Yn, Xn),
-			(Xn, Yn, N) | (Xp, Yp, S) | (Zn, Xp, W) | (Zp, Xp, E) => (Yn, Xp),
-			(Xn, Zn, W) | (Xp, Zn, E) | (Zn, Yp, S) | (Zp, Yn, N) => (Yn, Zn),
-			(Xn, Zp, E) | (Xp, Zp, W) | (Zn, Yn, N) | (Zp, Yp, S) => (Yn, Zp),
-
-			(Xn, Yn, S) | (Xp, Yp, N) | (Zn, Xn, W) | (Zp, Xn, E) => (Yp, Xn),
-			(Xn, Yp, N) | (Xp, Yn, S) | (Zn, Xp, E) | (Zp, Xp, W) => (Yp, Xp),
-			(Xn, Zn, E) | (Xp, Zn, W) | (Zn, Yn, S) | (Zp, Yp, N) => (Yp, Zn),
-			(Xn, Zp, W) | (Xp, Zp, E) | (Zn, Yp, N) | (Zp, Yn, S) => (Yp, Zp),
-
-			(Xn, Zp, S) | (Xp, Zn, N) | (Yn, Xn, W) | (Yp, Xn, E) => (Zn, Xn),
-			(Xn, Zn, N) | (Xp, Zp, S) | (Yn, Xp, E) | (Yp, Xp, W) => (Zn, Xp),
-			(Xn, Yn, E) | (Xp, Yn, W) | (Yn, Zp, S) | (Yp, Zn, N) => (Zn, Yn),
-			(Xn, Yp, W) | (Xp, Yp, E) | (Yn, Zn, N) | (Yp, Zp, S) => (Zn, Yp),
-
-			(Xn, Zn, S) | (Xp, Zp, N) | (Yn, Xn, E) | (Yp, Xn, W) => (Zp, Xn),
-			(Xn, Zp, N) | (Xp, Zn, S) | (Yn, Xp, W) | (Yp, Xp, E) => (Zp, Xp),
-			(Xn, Yn, W) | (Xp, Yn, E) | (Yn, Zn, S) | (Yp, Zp, N) => (Zp, Yn),
-			(Xn, Yp, E) | (Xp, Yp, W) | (Yn, Zp, N) | (Yp, Zn, S) => (Zp, Yp),
-
-			(Xn | Xp, Xn | Xp, _) | (Yn | Yp, Yn | Yp, _) | (Zn | Zp, Zn | Zp, _) => {
-				CubeFace::fail(side, north)
-			}
+		let (my_side_untransformed, my_north_untransformed) = match prev_face_adj_edge {
+			N => (Yp, Zn),
+			E => (Xp, Yp),
+			S => (Yn, Zp),
+			W => (Xn, Yp),
 		};
+		let side = centralizing_transform.apply_inverse(my_side_untransformed);
+		let north = centralizing_transform.apply_inverse(my_north_untransformed);
 
-		Self {
-			side: my_side,
-			north: my_north,
-		}
+		Self { side, north }
 	}
 
 	/// Get the transformation that gets `self`'s `side` to be `Zp` and its `north` to be
@@ -495,7 +498,7 @@ impl CubeFace {
 			Xp => ThreeQuartersCw,
 			Yn => HalfTurn,
 			Yp => Zero,
-			Zn | Zp => panic!(
+			Zn | Zp => unreachable!(
 				"after revolution to get self to Zp, self was still pointing toward {north:?}"
 			),
 		};
@@ -644,7 +647,7 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 	/// 2. Arbitrarily position the first face we find (leftmost in the first nonempty
 	///    row) to be Zp pointing toward Yp.
 	/// 3. For each face after the first face, record its position relative to a face
-	///    we've already positioned (we bfs to move from known faces to not-yet-known
+	///    we've already positioned (we BFS to move from known faces to not-yet-known
 	///    faces) in order to figure out which face of the cube it is and how it's oriented.
 	/// 4. Reorder the list of faces so that we can index with a `Direction`, i.e., the
 	///    face on side `Direction::iter().nth(i).unwrap()` is at index `i`.
@@ -676,14 +679,12 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 		let face_grid_n_cols = grid.ncols() / side_len;
 		// Where in the original grid (the input) the faces of the cube lie
 		let face_grid_loc_to_idx = {
-			let mut face_grid_locs = [[0; 2]; Direction::COUNT];
 			let mut face_grid_loc_to_idx = HashMap::with_capacity(Direction::COUNT);
 			let mut idx = 0;
 
 			for (r, c) in iproduct!(0..face_grid_n_rows, 0..face_grid_n_cols) {
 				if grid[[r * side_len, c * side_len]] != Tile::Aether {
 					let loc = [r.cast(), c.cast()];
-					face_grid_locs[idx] = loc;
 					assert!(face_grid_loc_to_idx.insert(loc, idx).is_none());
 					idx += 1;
 				}
@@ -693,24 +694,25 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 
 		// Array of CubeFace; starts with impossible dummy data
 		let mut faces_unordered = [CubeFace {
-			side: Yp,
-			north: Yp,
+			side: Xn,
+			north: Xn,
 		}; Direction::COUNT];
 
+		let first_idx = 0;
 		let top_face = {
-			let (first_face_pos, first_face_id) = face_grid_loc_to_idx
+			let first_face_pos = face_grid_loc_to_idx
 				.iter()
-				.find_map(|(&k, &idx)| (idx == 0).then_some((k, idx)))
+				.find_map(|(&k, &idx)| (idx == first_idx).then_some(k))
 				.unwrap();
 
 			PartialFaceDatum {
-				idx: first_face_id,
+				idx: first_idx,
 				pos: first_face_pos,
 				d_pos: Default::default(),
 			}
 		};
 
-		// bfs the grid of cubes, filling in new faces based on their position relative to
+		// BFS the grid of cubes, filling in new faces based on their position relative to
 		// the face they were adjacent to
 		let mut stack = vec![top_face];
 		let mut seen = [false; Direction::COUNT];
@@ -720,7 +722,7 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 			d_pos: [dr, dc],
 		}) = stack.pop()
 		{
-			let new_face = if idx == 0 {
+			let new_face = if idx == first_idx {
 				// the famed "centralized" face
 				CubeFace {
 					side: Zp,
@@ -730,26 +732,22 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 				let prev_face_pos = [r - dr, c - dc];
 				let prev_face_idx =
 					*face_grid_loc_to_idx.get(&prev_face_pos).unwrap_or_else(|| {
-						panic!(
+						unreachable!(
 							"logic error: face at {prev_face_pos:?} was \
-							 None ((r, dr, c, dc) = {:?})",
+							 None; (r, dr, c, dc) = {:?}",
 							(r, dr, c, dc)
 						)
 					});
-				let CubeFace {
-					side: prev_side,
-					north: prev_north,
-				} = faces_unordered[prev_face_idx];
 
 				let prev_face_adj_edge = match [dr, dc] {
 					[-1, 0] => N,
 					[1, 0] => S,
 					[0, -1] => W,
 					[0, 1] => E,
-					_ => panic!("logic error: {:?} is an invalid (dr, dc)", (dr, dc)),
+					_ => unreachable!("logic error: {:?} is an invalid (dr, dc)", (dr, dc)),
 				};
 
-				CubeFace::from_adjacent_face(prev_side, prev_north, prev_face_adj_edge)
+				CubeFace::from_adjacent_face(faces_unordered[prev_face_idx], prev_face_adj_edge)
 			};
 
 			faces_unordered[idx] = new_face;
@@ -788,16 +786,6 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 		// headings
 		let mut adjacent_faces = Faces::filled(None);
 		for side in Direction::iter() {
-			/// Given four sides in clockwise order, rotate them so that `first` is first
-			fn get_ordered_adj_sides(
-				mut sides_cw: [Direction; Heading::COUNT],
-				first: Direction,
-			) -> AdjacentFaces<Direction> {
-				let idx = sides_cw.iter().position(|&side| side == first).unwrap();
-				sides_cw.rotate_left(idx);
-				AdjacentFaces(sides_cw)
-			}
-
 			let north = norths[side];
 
 			// To minimize the number of cases we need to check, we'll do all of our work
@@ -808,52 +796,28 @@ impl<'a> From<ArrayView2<'a, Tile>> for Cube<'a> {
 
 			let centralizing_transform = CubeFace { side, north }.get_centralizing_transform();
 
-			// The basic structure here is we list the four adjacent sides of each face in
-			// clockwise order (looking at the face from outside the cube), beginning with
-			// an arbitrary face, and then rotate the list as needed so that it lines up
-			// with current face's North, so that it lists the faces at [N, E, S, W].
-			let adj_sides_nsew = match side {
-				Xn => get_ordered_adj_sides([Yn, Zn, Yp, Zp], north),
-				Xp => get_ordered_adj_sides([Yn, Zp, Yp, Zn], north),
-				Yn => get_ordered_adj_sides([Xn, Zp, Xp, Zn], north),
-				Yp => get_ordered_adj_sides([Xn, Zn, Xp, Zp], north),
-				Zn => get_ordered_adj_sides([Xn, Yn, Xp, Yp], north),
-				Zp => get_ordered_adj_sides([Xn, Yp, Xp, Yn], north),
-			};
+			// The sides adjacent to the current face, listed in clockwise order starting
+			// the face at Zp's North
+			let adj_sides_nsew = AdjacentFaces(
+				[Yp, Xp, Yn, Xn].map(|dir| centralizing_transform.apply_inverse(dir)),
+			);
 
 			let adj_sides_relative_headings = Heading::CW_FROM_N.map(|at_heading| {
-				// Treat everything as if it were relative to the centralized face — this
-				// massively reduces the amount of code we have to write
+				// Treat everything as if it were relative to the centralized face. This
+				// massively reduces the amount of code we have to write, as the heading
+				// alone tells us the side we're working with: N is Yp, E is Xp, S is Yn, W
+				// is Xn.
 				let untransformed_adj_side = adj_sides_nsew[at_heading];
-				let adj_north = centralizing_transform.apply(norths[untransformed_adj_side]);
-				let adj_side = centralizing_transform.apply(untransformed_adj_side);
+				let adj_face_north = centralizing_transform.apply(norths[untransformed_adj_side]);
 
-				// beautiful cyclic structure here, both within and between cases
-				match (at_heading, (adj_side, adj_north)) {
-					(N, (_, Zn))
-					| (E, (Xn, Yn) | (Yn, Xp) | (Xp, Yp) | (Yp, Xn))
-					| (S, (_, Zp))
-					| (W, (Xn, Yp) | (Yp, Xp) | (Xp, Yn) | (Yn, Xn)) => N,
-
-					(N, (Xn, Yp) | (Yp, Xp) | (Xp, Yn) | (Yn, Xn))
-					| (E, (_, Zn))
-					| (S, (Xn, Yn) | (Yn, Xp) | (Xp, Yp) | (Yp, Xn))
-					| (W, (_, Zp)) => E,
-
-					(N, (_, Zp))
-					| (E, (Xn, Yp) | (Yp, Xp) | (Xp, Yn) | (Yn, Xn))
-					| (S, (_, Zn))
-					| (W, (Xn, Yn) | (Yn, Xp) | (Xp, Yp) | (Yp, Xn)) => S,
-
-					(N, (Xn, Yn) | (Yn, Xp) | (Xp, Yp) | (Yp, Xn))
-					| (E, (_, Zp))
-					| (S, (Xn, Yp) | (Yp, Xp) | (Xp, Yn) | (Yn, Xn))
-					| (W, (_, Zn)) => W,
-
-					(_, (Xn | Xp, Xn | Xp) | (Yn | Yp, Yn | Yp)) => {
-						CubeFace::fail(adj_side, adj_north)
+				match (at_heading, adj_face_north) {
+					(E | W, Yp) | (N, Zn) | (S, Zp) => N,
+					(N | S, Xp) | (E, Zn) | (W, Zp) => E,
+					(E | W, Yn) | (N, Zp) | (S, Zn) => S,
+					(N | S, Xn) | (E, Zp) | (W, Zn) => W,
+					(N | S, Yn | Yp) | (E | W, Xn | Xp) => {
+						unreachable!("got side pointing in its own direction")
 					}
-					(_, (Zn | Zp, _)) => unreachable!(),
 				}
 			});
 

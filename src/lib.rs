@@ -146,7 +146,7 @@ macro_rules! read_file {
 	($filename:literal) => {{
 		use std::path::{Path, PathBuf};
 		// `file!()` returns the path where `read_file!` is invoked, not the file where
-		// it's defined (this very file)
+		// it's defined (i.e., this very file)
 		let file_relpath = Path::new(file!());
 
 		let child_path = [
