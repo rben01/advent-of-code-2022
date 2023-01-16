@@ -7,6 +7,9 @@ use std::{
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
+type Map<K, V> = HashMap<K, V>;
+type Set<T> = HashSet<T>;
+
 type Coord = i32;
 type Ans = i32;
 
@@ -120,7 +123,7 @@ impl Translates for Direction {
 
 #[derive(Debug, Clone)]
 struct Elves {
-	locs: HashSet<Pair>,
+	locs: Set<Pair>,
 	heading: Heading,
 }
 
@@ -135,7 +138,6 @@ impl Elves {
 			c_min = c_min.min(c);
 			c_max = c_max.max(c);
 		}
-		// println!("{:?}", (r_min, r_max, c_min, c_max));
 		(r_max - r_min + 1) * (c_max - c_min + 1)
 	}
 
@@ -149,8 +151,8 @@ impl Elves {
 			heading: curr_heading,
 		} = self;
 
-		let mut destination_counts = HashMap::new();
-		let mut tentative_destinations = HashMap::new();
+		let mut destination_counts = Map::new();
+		let mut tentative_destinations = Map::new();
 
 		for &loc in &*locs {
 			let surroundings_are_empty =
@@ -197,7 +199,7 @@ impl Elves {
 }
 
 fn read_input(input: &str) -> Elves {
-	let mut locs = HashSet::new();
+	let mut locs = Set::new();
 	for (row, line) in input.lines().enumerate() {
 		for (col, c) in line.chars().enumerate() {
 			if c == '#' {
