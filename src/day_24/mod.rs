@@ -19,7 +19,7 @@ pub fn ans() -> Answer<Ans, Ans> {
 	ans_for_input(&read_file!("input.txt"))
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Pair(Coord, Coord);
 
 impl Pair {
@@ -41,7 +41,27 @@ impl Range {
 	}
 
 	fn contains(self, x: Coord) -> bool {
-		(self.0..=self.1).contains(&x)
+		(self.lo()..=self.hi()).contains(&x)
+	}
+
+	fn n_elems(self) -> usize {
+		self.hi() - self.lo() + 1
+	}
+
+	fn incr(self, mut x: Coord) -> Coord {
+		x += 1;
+		if x > self.hi() {
+			x = self.lo();
+		}
+		x
+	}
+
+	fn decr(self, mut x: Coord) -> Coord {
+		x -= 1;
+		if x < self.lo() {
+			x = self.hi();
+		}
+		x
 	}
 }
 
@@ -140,14 +160,14 @@ fn read_input(input: &str) -> Valley {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Stage {
 	FirstTripToEnd,
 	TripBackToStart,
 	SecondTripToEnd,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct State {
 	loc: Pair,
 	stage: Stage,
@@ -156,11 +176,15 @@ struct State {
 
 /// A set, for each Direction, of `(timestamp, location)` of blizzards. I.e., at time
 /// `timestamp`, is there a blizzard blowing to the `direction` at position `location`?
+/// Takes advantage of the fact that blizzards wrap around after time T by storing all
+/// pairs `(ts, blizzard_loc)` for `ts` in `0..T`
 #[derive(Debug, Clone)]
 struct Blizzards {
 	rows: Range,
 	cols: Range,
+	/// Blizzards moving N or S
 	vertical_blizzards: Set<(usize, Pair)>,
+	///Blizzards moving E or W
 	horizontal_blizzards: Set<(usize, Pair)>,
 }
 
@@ -174,8 +198,8 @@ impl Blizzards {
 			horizontal_blizzards,
 		} = &self;
 
-		let ts_vert = ts % (rows.hi() - rows.lo() + 1);
-		let ts_horiz = ts % (cols.hi() - cols.lo() + 1);
+		let ts_vert = ts % rows.n_elems();
+		let ts_horiz = ts % cols.n_elems();
 
 		vertical_blizzards.contains(&(ts_vert, loc))
 			|| horizontal_blizzards.contains(&(ts_horiz, loc))
@@ -187,39 +211,23 @@ impl From<Valley> for Blizzards {
 		use Direction::*;
 
 		fn decr_row(loc: Pair, rows: Range) -> Pair {
-			let Pair(mut r, c) = loc;
-			r -= 1;
-			if r < rows.lo() {
-				r = rows.hi();
-			}
-			Pair(r, c)
+			let Pair(r, c) = loc;
+			Pair(rows.decr(r), c)
 		}
 
 		fn incr_row(loc: Pair, rows: Range) -> Pair {
-			let Pair(mut r, c) = loc;
-			r += 1;
-			if r > rows.hi() {
-				r = rows.lo();
-			}
-			Pair(r, c)
+			let Pair(r, c) = loc;
+			Pair(rows.incr(r), c)
 		}
 
 		fn decr_col(loc: Pair, cols: Range) -> Pair {
-			let Pair(r, mut c) = loc;
-			c -= 1;
-			if c < cols.lo() {
-				c = cols.hi();
-			}
-			Pair(r, c)
+			let Pair(r, c) = loc;
+			Pair(r, cols.decr(c))
 		}
 
 		fn incr_col(loc: Pair, cols: Range) -> Pair {
-			let Pair(r, mut c) = loc;
-			c += 1;
-			if c > cols.hi() {
-				c = cols.lo();
-			}
-			Pair(r, c)
+			let Pair(r, c) = loc;
+			Pair(r, cols.incr(c))
 		}
 
 		let Valley {
@@ -286,7 +294,7 @@ fn priority(start: Pair, end: Pair, state: State) -> Reverse<usize> {
 	Reverse(net_dist + timestamp)
 }
 
-fn traverse(valley: Valley, is_done_fn: impl Fn(&State) -> bool) -> Ans {
+fn traverse(valley: Valley, is_done_pred: impl Fn(&State) -> bool) -> Ans {
 	use Stage::*;
 
 	let Valley {
@@ -318,35 +326,27 @@ fn traverse(valley: Valley, is_done_fn: impl Fn(&State) -> bool) -> Ans {
 		_,
 	)) = pq.pop()
 	{
-		if is_done_fn(&state) {
+		if is_done_pred(&state) {
 			return timestamp;
 		}
 
 		let new_timestamp = timestamp + 1;
 		for mv in Move::all_moves() {
-			let new_loc @ Pair(new_r, new_c) = match mv.apply(loc) {
-				Some(loc) => loc,
-				None => continue,
+			let new_loc = match mv.apply(loc) {
+				Some(new_loc @ Pair(new_r, new_c))
+					if (rows.contains(new_r) && cols.contains(new_c)
+						|| new_loc == start || new_loc == end)
+						&& !blizzards.contains_at_time(new_loc, new_timestamp) =>
+				{
+					new_loc
+				}
+				_ => continue,
 			};
 
-			if !(rows.contains(new_r) && cols.contains(new_c) || new_loc == start || new_loc == end)
-				|| blizzards.contains_at_time(new_loc, new_timestamp)
-			{
-				continue;
-			}
-
-			let new_stage = if new_loc == end {
-				if stage == FirstTripToEnd {
-					TripBackToStart
-				} else {
-					stage
-				}
-			} else if new_loc == start {
-				if stage == TripBackToStart {
-					SecondTripToEnd
-				} else {
-					stage
-				}
+			let new_stage = if new_loc == end && stage == FirstTripToEnd {
+				TripBackToStart
+			} else if new_loc == start && stage == TripBackToStart {
+				SecondTripToEnd
 			} else {
 				stage
 			};
