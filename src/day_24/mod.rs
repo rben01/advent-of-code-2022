@@ -41,7 +41,11 @@ impl Range {
 	}
 
 	fn contains(self, x: Coord) -> bool {
-		(self.0..=self.1).contains(&x)
+		(self.lo()..=self.hi()).contains(&x)
+	}
+
+	fn width(self) -> Coord {
+		self.hi() - self.lo() + 1
 	}
 }
 
@@ -160,8 +164,8 @@ struct State {
 struct Blizzards {
 	rows: Range,
 	cols: Range,
-	vertical_blizzards: Set<(usize, Pair)>,
-	horizontal_blizzards: Set<(usize, Pair)>,
+	vertical_blizzards: Vec<Set<Pair>>,
+	horizontal_blizzards: Vec<Set<Pair>>,
 }
 
 impl Blizzards {
@@ -177,8 +181,7 @@ impl Blizzards {
 		let ts_vert = ts % (rows.hi() - rows.lo() + 1);
 		let ts_horiz = ts % (cols.hi() - cols.lo() + 1);
 
-		vertical_blizzards.contains(&(ts_vert, loc))
-			|| horizontal_blizzards.contains(&(ts_horiz, loc))
+		vertical_blizzards[ts_vert].contains(&loc) || horizontal_blizzards[ts_horiz].contains(&loc)
 	}
 }
 
@@ -229,29 +232,29 @@ impl From<Valley> for Blizzards {
 			..
 		} = valley;
 
-		let mut vertical_blizzards = Set::new();
-		let mut horizontal_blizzards = Set::new();
+		let mut vertical_blizzards = vec![Set::new(); rows.width()];
+		let mut horizontal_blizzards = vec![Set::new(); cols.width()];
 
 		for dir in Direction::iter() {
 			// Get locations of all blizzards pointing in this direction t == 0
 			let mut blizzards_now = blizzards
 				.iter()
 				.copied()
-				.filter_map(|(loc, d)| (d == dir).then_some((0, loc)))
+				.filter_map(|(loc, d)| (d == dir).then_some(loc))
 				.collect::<Vec<_>>();
 
-			let (range, blizzard_set, new_loc_fn) = match dir {
+			let (range, blizzard_vec, new_loc_fn) = match dir {
 				N => (rows, &mut vertical_blizzards, decr_row as fn(_, _) -> _),
 				E => (cols, &mut horizontal_blizzards, incr_col as _),
 				S => (rows, &mut vertical_blizzards, incr_row as _),
 				W => (cols, &mut horizontal_blizzards, decr_col as _),
 			};
 
-			for _ in range.lo()..=range.hi() {
-				blizzard_set.extend(blizzards_now.iter().copied());
+			for i in 0..range.width() {
+				blizzard_vec[i].extend(blizzards_now.iter().copied());
 				blizzards_now = blizzards_now
 					.into_iter()
-					.map(|(ts, loc)| (ts + 1, new_loc_fn(loc, range)))
+					.map(|loc| new_loc_fn(loc, range))
 					.collect();
 			}
 		}
