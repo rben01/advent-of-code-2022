@@ -12,7 +12,7 @@ type Ans = usize;
 
 fn ans_for_input(input: &str) -> Answer<Ans, Ans> {
 	let valley = read_input(input);
-	(23, (pt1(valley.clone()), pt2(valley))).into()
+	(24, (pt1(valley.clone()), pt2(valley))).into()
 }
 
 pub fn ans() -> Answer<Ans, Ans> {
